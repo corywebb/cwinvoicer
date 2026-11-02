@@ -1,0 +1,47 @@
+{
+  "name": "cwinvoicer",
+  "version": "1.0.0",
+  "private": true,
+  "productName": "CW Invoicer",
+  "description": "Local invoicing for Cory Webb Media. Data stored as JSON files.",
+  "author": "Cory Webb Media",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "node server.js --open",
+    "app": "electron .",
+    "dist": "electron-builder --mac"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.corywebbmedia.cwinvoicer",
+    "productName": "CW Invoicer",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "server.js",
+      "lib/**",
+      "public/**",
+      "electron/**",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.business",
+      "icon": "build/icon.icns",
+      "target": [
+        "dmg"
+      ],
+      "identity": null
+    },
+    "dmg": {
+      "title": "CW Invoicer"
+    }
+  }
+}
