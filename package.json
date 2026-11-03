@@ -9,7 +9,9 @@
   "scripts": {
     "start": "node server.js --open",
     "app": "electron .",
-    "dist": "electron-builder --mac"
+    "dist": "electron-builder --mac",
+    "test": "node --test",
+    "demo": "node scripts/demo.js"
   },
   "engines": {
     "node": ">=18"

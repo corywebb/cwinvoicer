@@ -1,23 +1,83 @@
-# CW Invoicer
+<p align="center">
+  <img src="public/favicon.svg" width="64" height="64" alt="CW Invoicer receipt icon">
+</p>
 
-A local invoicing app for Cory Webb Media. A Mac desktop app; no accounts, no cloud.
+<h1 align="center">CW Invoicer</h1>
+<p align="center"><strong>Your work. Your invoices. Your Mac.</strong><br>
+Local invoicing by Cory Webb Media. No accounts, no cloud service.</p>
 
-## Build and run
+<p align="center">
+  <a href="#try-the-demo">Try the demo</a> ·
+  <a href="#build-the-mac-app">Build the Mac app</a> ·
+  <a href="docs/visual-guide.md">Visual tour</a> ·
+  <a href="CONTRIBUTING.md">Contribute</a>
+</p>
 
-- **Build:** `npm install`, then `npm run dist`. This creates `dist/mac/CW Invoicer.app` and `dist/CW Invoicer-1.0.0.dmg`.
-  Drag the app into Applications. It isn't signed, so the first time, right-click it and choose **Open**.
-- **Try it without building:** `npm run app`.
-- The server runs inside the app on a private port, so no Terminal, browser or Google Chrome is needed. Cmd+Q quits everything.
-  PDFs are made with the app's built-in Chromium and open in Preview; Print uses the macOS print dialog.
-- **Shortcuts:** ⌘N new invoice, ⌘T log time, ⌘L line item, ⌘E expense, ⌘1–⌘6 sections, ⌘, settings.
-- **Data folder:** set in `~/Library/Application Support/CW Invoicer/config.json` (`dataDir`), or with
-  **File → Choose Data Folder…**, which can copy your data to the new folder. Without a setting it uses
-  `~/Library/Application Support/CW Invoicer/data`. `CWINVOICER_DATA` overrides it, for testing.
+![CW Invoicer dashboard showing fictional client work and invoice balances](docs/images/dashboard.png)
 
-## Browser mode (for development)
+Track time, line items and expenses. Turn unbilled work into clear invoices, export PDFs,
+and keep the records in a folder you control. The desktop app runs its local server and
+Chromium renderer inside Electron; the server uses only Node built-ins, and the browser UI is plain JavaScript.
 
-`npm start` runs the same server on <http://localhost:4242> and opens it in your browser (stop it with Ctrl+C).
-PDF export then uses Google Chrome. It uses the same data folder as the desktop app (from its `config.json`) unless `CWINVOICER_DATA` is set; `PORT` changes the port.
+| From work to payment | What the app handles |
+| --- | --- |
+| **Organize** | Clients, projects and hourly rate overrides |
+| **Track** | Flexible time input, quantity × rate items and expenses |
+| **Invoice** | Summary or detailed lines, editable descriptions and live preview |
+| **Finish** | PDF export, printing, due dates and paid/unpaid status |
+| **Keep** | Plain JSON files, a chosen data folder and generated PDFs |
+
+## Try the demo
+
+With Node.js installed, clone the repository and start a disposable workspace:
+
+```sh
+git clone https://github.com/corywebb/cwinvoicer.git
+cd cwinvoicer
+npm run demo
+```
+
+Open the local URL printed in the terminal. No dependency installation is needed for the demo.
+It creates **fictional clients and invoices in a fresh temporary folder**, separate from your
+real data. Stop with Ctrl+C to discard it. The [visual tour](docs/visual-guide.md) shows what to expect.
+
+## Build the Mac app
+
+```sh
+npm ci
+npm run app      # run Electron without packaging
+npm run dist     # create the .app and .dmg in dist/
+```
+
+Output names depend on your architecture; an Apple Silicon build produces
+`dist/mac-arm64/CW Invoicer.app` and `dist/CW Invoicer-1.0.0-arm64.dmg`.
+Drag the app into Applications. The build is unsigned; on first launch, right-click and choose **Open**.
+
+The server uses a private local port. No Terminal or separate Chrome installation is needed
+for the packaged app. PDFs use Electron's built-in Chromium and open in the default PDF viewer;
+Print uses the macOS print dialog. Cmd+Q quits the app and server.
+
+| Shortcut | Action |
+| --- | --- |
+| ⌘N | New invoice |
+| ⌘T / ⌘L / ⌘E | Log time / add line item / add expense |
+| ⌘1–⌘6 | Switch sections |
+| ⌘, | Settings |
+
+## Browser development
+
+`npm start` runs the same server at <http://localhost:4242> and opens your browser.
+Stop it with Ctrl+C. Browser PDF export uses an installed Chrome-family browser; use
+`CHROME_PATH` for a custom executable, or **Print → Save as PDF** when none is available.
+`PORT` changes the server port.
+
+Normal browser and desktop modes use the same configured data folder. For an isolated manual workspace:
+
+```sh
+CWINVOICER_DATA="$(mktemp -d)" npm start
+```
+
+Use `npm run demo` when you want seeded examples and automatic cleanup.
 
 ## How it works
 
@@ -27,8 +87,8 @@ PDF export then uses Google Chrome. It uses the same data folder as the desktop 
 3. **Create an invoice**: pick a client. Everything unbilled for that client starts selected; uncheck anything you don't
    want to bill yet. You can add time, line items or expenses right in the builder. Line descriptions can be edited
    before you create the invoice.
-   - **Summary** format: one line per project (hours × rate). A project's line items and expenses are combined into one
-     "‹Project› – expenses" line. Time with no project becomes one line; items and expenses with no project are listed on their own.
+   - **Summary** format: one time line per project and hourly rate (hours × rate). A project's line items and expenses are combined into one
+     additional line, labeled as items, expenses, or both. Time with no project is grouped by rate; items and expenses with no project are listed on their own.
    - **Detailed** format: every time entry, line item and expense with its date and own description, grouped under a
      bold heading for each project (oldest first). Entries with no project come last, under "Other".
    You can switch the format on an existing invoice too. The default is set in Settings.
@@ -52,7 +112,51 @@ Everything is plain JSON in the data folder (by default `~/Library/Application S
 | `clients.json`, `projects.json` | clients and projects |
 | `time.json`, `items.json`, `expenses.json` | work entries (`invoiceId` is set once billed) |
 | `invoices.json` | invoices, with a copy of each line as it was billed |
-| `logo.png`, `pdfs/` | logo and generated PDFs |
+| `logo.*`, `pdfs/` | uploaded logo and generated PDFs |
+
+The desktop configuration is `~/Library/Application Support/CW Invoicer/config.json`; its
+`dataDir` setting selects a custom folder. `CWINVOICER_DATA` overrides that setting.
 
 Back up the data folder to back up everything. To move it (for example to iCloud Drive), use **File → Choose Data Folder…**
 in the app. The current location is shown on the Settings page.
+
+
+## Inside the repository
+
+```text
+cwinvoicer/
+|-- electron/main.js       Mac window, menus, PDF and printing
+|-- server.js              Loopback HTTP API and JSON persistence
+|-- public/
+|   |-- app.js             Workspace, forms and invoice builder
+|   |-- lines.js           Shared invoice calculations
+|   |-- styles.css         Responsive workspace styles
+|   `-- index.html         App shell
+|-- lib/invoice-template.js  Printable invoice HTML
+|-- scripts/demo.js        Disposable synthetic workspace
+|-- test/                  Node regression tests
+`-- docs/                  Screenshots and architecture source
+```
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.png">
+  <img src="docs/images/architecture-light.png" alt="CW Invoicer architecture: Electron, workspace UI, local server, JSON data and PDF export">
+</picture>
+
+Explore the [architecture and interactive diagram](docs/visual-guide.md#architecture).
+The server binds to loopback, checks the request host, and requires an app header for API writes.
+This is a single-user local app, not a hosted multi-user billing service.
+
+## Development checks
+
+```sh
+npm test
+```
+
+Tests use Node's built-in runner and temporary data folders. They cover rate precedence,
+line grouping, HTML escaping, rebilling protection and invoice state transitions.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the browser checklist and fork-to-PR workflow.
+
+## Contributors
+
+- [Mike Hamanaka](https://github.com/hamanakam1)

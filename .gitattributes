@@ -1,0 +1,3 @@
+# Collapse generated viewers in diffs and keep them out of language statistics.
+# The editable JSON specifications remain ordinary reviewable source files.
+docs/diagrams/*.html linguist-generated=true

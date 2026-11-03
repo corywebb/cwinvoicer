@@ -3,11 +3,6 @@
 // Desktop app (Electron): leave room for the Mac window buttons and make the top edge draggable.
 if (navigator.userAgent.includes('Electron')) document.documentElement.classList.add('desktop');
 
-// Hide the sidebar logo if there isn't one.
-const brandLogo = document.querySelector('.brand img');
-brandLogo?.addEventListener('error', () => brandLogo.remove());
-if (brandLogo?.complete && !brandLogo.naturalWidth) brandLogo.remove();
-
 // ---------- tiny DOM + API helpers ----------
 
 function h(tag, props, ...kids) {
@@ -25,6 +20,16 @@ function h(tag, props, ...kids) {
     el.append(kid instanceof Node ? kid : String(kid));
   }
   return el;
+}
+
+// Reapply after builder sections update as well as after full-page renders.
+function scrollTables(root) {
+  root.querySelectorAll('table.data').forEach((table) => {
+    if (table.parentElement.classList.contains('table-scroll')) return;
+    const wrap = h('div', { class: 'table-scroll', tabindex: 0, role: 'region', 'aria-label': 'Scrollable data table' });
+    table.replaceWith(wrap);
+    wrap.append(table);
+  });
 }
 
 async function api(method, url, body) {
@@ -160,12 +165,28 @@ function formModal({ title, fields, values = {}, submitLabel = 'Save', onSubmit 
   };
 
   return new Promise((resolve) => {
+    let saving = false;
+    let closing = false;
+    let pressedOutside = false;
     const close = (result) => {
+      if (saving || closing) return;
+      closing = true;
+      backdrop.close();
       backdrop.remove();
-      document.removeEventListener('keydown', onKey);
       resolve(result);
     };
-    const onKey = (e) => e.key === 'Escape' && close(null);
+    const showError = (msg) => {
+      const el = form.querySelector('.form-error');
+      el.textContent = msg;
+      el.hidden = false;
+    };
+    // The <dialog> is the hit target for its ::backdrop and its own scrollbar, so test
+    // the pointer position, not just the target.
+    const outside = (e) => {
+      if (e.target !== backdrop) return false;
+      const r = backdrop.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
     const form = h(
       'form',
       {
@@ -174,23 +195,46 @@ function formModal({ title, fields, values = {}, submitLabel = 'Save', onSubmit 
         oninput: () => (read(), refreshDynamic()),
         onsubmit: async (ev) => {
           ev.preventDefault();
+          if (saving) return;
+          form.querySelector('.form-error').hidden = true;
           read();
           const bad = controls.find(({ spec }) => spec.type === 'hours' && Number.isNaN(vals[spec.name]));
-          if (bad) return toast(`${bad.spec.label}: enter hours like 1.5, 1:30 or 90m`, true);
+          if (bad) return showError(`${bad.spec.label}: enter hours like 1.5, 1:30 or 90m`);
+          const submit = form.querySelector('[type=submit]');
+          saving = true;
+          submit.disabled = true;
+          submit.textContent = 'Saving…';
+          let result;
           try {
-            close(await onSubmit(vals));
+            result = await onSubmit(vals);
           } catch (e) {
-            toast(e.message, true);
+            saving = false;
+            submit.disabled = false;
+            submit.textContent = submitLabel;
+            return showError(e.message);
           }
+          saving = false;
+          close(result);
         },
       },
-      h('h2', null, title),
+      h('h2', { id: 'modal-title' }, title),
+      h('p', { class: 'form-error', role: 'alert', hidden: true }),
       fields.map((f) => (Array.isArray(f) ? h('div', { class: 'row' }, f.map(fieldEl)) : fieldEl(f))),
       h('div', { class: 'foot' }, h('button', { type: 'button', onclick: () => close(null) }, 'Cancel'), h('button', { class: 'primary', type: 'submit' }, submitLabel))
     );
-    const backdrop = h('div', { class: 'backdrop', onmousedown: (e) => e.target === backdrop && close(null) }, form);
+    const backdrop = h('dialog', { class: 'dialog-shell', 'aria-labelledby': 'modal-title',
+      oncancel: (e) => { e.preventDefault(); close(null); },
+      // A repeated Escape can close the dialog without a cancel event. Reopen it during a
+      // save so the form and its pending result survive; otherwise treat it as Cancel.
+      onclose: () => {
+        if (closing) return;
+        if (saving) backdrop.showModal();
+        else close(null);
+      },
+      onmousedown: (e) => (pressedOutside = outside(e)),
+      onclick: (e) => pressedOutside && outside(e) && close(null) }, form);
     document.body.append(backdrop);
-    document.addEventListener('keydown', onKey);
+    backdrop.showModal();
     refreshDynamic();
     form.querySelector('input:not([type=checkbox]):not(:disabled), textarea, select:not(:disabled)')?.focus();
   });
@@ -306,11 +350,13 @@ function dashboard() {
   const quickAdd = (type) => async () => (await editEntry(type)) && (toast('Saved'), render());
 
   return h('div', null,
+    h('div', { class: 'eyebrow' }, 'YOUR BUSINESS AT A GLANCE'),
     pageHead('Dashboard',
       h('button', { onclick: quickAdd('time') }, TYPES.time.add),
       h('button', { onclick: quickAdd('items') }, TYPES.items.add),
       h('button', { onclick: quickAdd('expenses') }, TYPES.expenses.add)),
-    h('div', { class: 'grid' },
+    h('p', { class: 'page-intro' }, 'Good work deserves a clear invoice. Here’s where things stand.'),
+    h('div', { class: 'grid stats-grid' },
       h('div', { class: 'card' }, h('div', { class: 'muted small' }, 'Unbilled'), h('div', { class: 'stat' }, `$${money(totalUnbilled)}`),
         h('div', { class: 'muted small' }, `${qtyFmt(totalHours)} hours of time`)),
       h('div', { class: 'card' }, h('div', { class: 'muted small' }, 'Outstanding invoices'), h('div', { class: 'stat' }, `$${money(outstandingTotal)}`),
@@ -327,7 +373,9 @@ function dashboard() {
               [r.hours && `${qtyFmt(r.hours)} hrs ($${money(r.time)})`, r.items && `items $${money(r.items)}`, r.expenses && `expenses $${money(r.expenses)}`]
                 .filter(Boolean).join(' · ')),
             h('div', { style: 'margin-top:12px' }, h('a', { class: 'btn primary', href: `#/invoices/new?client=${clientId}` }, 'Create invoice')))))
-      : h('div', { class: 'card empty' }, 'Nothing unbilled. Log some time to get started.'),
+      : h('div', { class: 'card empty' }, h('strong', null, S.clients.length ? 'You’re all caught up.' : 'Your next project starts here.'),
+          h('p', null, S.clients.length ? 'Log time, items or expenses when you’re ready to bill again.' : 'Add a client, log your work, and turn it into an invoice.'),
+          h('a', { class: 'btn primary', href: S.clients.length ? '#/time' : '#/clients' }, S.clients.length ? 'Log your work' : 'Add your first client')),
     h('h2', { style: 'margin-top:8px' }, 'Recent invoices'),
     invoiceTable(S.invoices.slice().sort((a, b) => b.number - a.number).slice(0, 6)));
 }
@@ -353,11 +401,11 @@ function entriesPage(type) {
     pageHead(TYPES[type].label,
       h('button', { class: 'primary', onclick: async () => (await editEntry(type, null, { clientId: filters.client, projectId: filters.project })) && (toast('Saved'), render()) }, TYPES[type].add)),
     h('div', { class: 'filters' },
-      h('select', { onchange: setFilter('client') }, h('option', { value: '' }, 'All clients'),
+      h('select', { 'aria-label': 'Filter by client', onchange: setFilter('client') }, h('option', { value: '' }, 'All clients'),
         activeClients(filters.client).map((c) => h('option', { value: c.id, selected: c.id === filters.client }, c.name))),
-      filters.client && h('select', { onchange: setFilter('project') }, h('option', { value: '' }, 'All projects'),
+      filters.client && h('select', { 'aria-label': 'Filter by project', onchange: setFilter('project') }, h('option', { value: '' }, 'All projects'),
         clientProjects(filters.client, filters.project).map((p) => h('option', { value: p.id, selected: p.id === filters.project }, p.name))),
-      h('select', { onchange: setFilter('status') },
+      h('select', { 'aria-label': 'Filter by status', onchange: setFilter('status') },
         [['unbilled', 'Unbilled'], ['invoiced', 'Invoiced'], ['all', 'All']].map(([v, l]) => h('option', { value: v, selected: v === filters.status }, l)))),
     h('div', { class: 'card' }, rows.length
       ? h('table', { class: 'data' },
@@ -391,7 +439,7 @@ function invoiceTable(list) {
     h('thead', null, h('tr', null, h('th', null, 'Invoice #'), h('th', null, 'Client'), h('th', null, 'Date'), h('th', null, 'Due'),
       h('th', { class: 'num' }, 'Total'), h('th', null, 'Status'))),
     h('tbody', null, list.map((inv) => h('tr', { class: 'clickable', onclick: () => (location.hash = `#/invoices/${inv.id}`) },
-      h('td', null, h('strong', null, inv.number)), h('td', null, inv.billTo?.name), h('td', null, usDate(inv.date)), h('td', null, usDate(inv.dueDate)),
+      h('td', null, h('a', { href: `#/invoices/${inv.id}`, 'aria-label': `Open invoice ${inv.number}` }, h('strong', null, inv.number))), h('td', null, inv.billTo?.name), h('td', null, usDate(inv.date)), h('td', null, usDate(inv.dueDate)),
       h('td', { class: 'num' }, `$${money(inv.total)}`), h('td', null, statusBadge(inv)))))));
 }
 
@@ -405,9 +453,9 @@ function invoicesPage() {
   return h('div', null,
     pageHead('Invoices', h('a', { class: 'btn primary', href: '#/invoices/new' }, '+ New invoice')),
     h('div', { class: 'filters' },
-      h('select', { onchange: set('client') }, h('option', { value: '' }, 'All clients'),
+      h('select', { 'aria-label': 'Filter by client', onchange: set('client') }, h('option', { value: '' }, 'All clients'),
         activeClients(invoiceFilters.client).map((c) => h('option', { value: c.id, selected: c.id === invoiceFilters.client }, c.name))),
-      h('select', { onchange: set('status') },
+      h('select', { 'aria-label': 'Filter by status', onchange: set('status') },
         [['all', 'All'], ['unpaid', 'Unpaid'], ['overdue', 'Overdue'], ['paid', 'Paid']].map(([v, l]) => h('option', { value: v, selected: v === invoiceFilters.status }, l))),
       h('span', { class: 'muted', style: 'align-self:center' }, `${list.length} invoices · $${money(list.reduce((s, i) => s + i.total, 0))}`)),
     invoiceTable(list));
@@ -554,7 +602,7 @@ function builderPage(query) {
   const schedulePreview = () => {
     clearTimeout(previewTimer);
     previewTimer = setTimeout(async () => {
-      if (!B.clientId) return;
+      if (!frame.isConnected || !B?.clientId) return;
       try {
         frame.srcdoc = await api('POST', '/api/invoices/preview', draft());
       } catch (e) {
@@ -587,6 +635,7 @@ function builderPage(query) {
       h('div', { class: 'actions', style: 'margin-top:14px;justify-content:flex-end' },
         h('button', { onclick: () => ((B = null), (location.hash = '#/invoices')) }, 'Discard'),
         h('button', { class: 'primary', disabled: !lines.some((l) => l.type !== 'heading'), onclick: create }, `Create invoice #${S.nextInvoiceNumber}`)));
+    scrollTables(linesCard);
     schedulePreview();
   };
 
@@ -638,6 +687,7 @@ function builderPage(query) {
             h('td', { class: 'num' }, money(entryAmount(type, e))),
             h('td', { class: 'right' }, h('button', { class: 'link', onclick: async () => (await editEntry(type, e, {}, { lockClient: true })) && (renderSection(type), renderLines()) }, 'Edit'))))))
       : h('div', { class: 'empty small' }, `No unbilled ${TYPES[type].label.toLowerCase()} for this client.`));
+    scrollTables(sections[type]);
   };
 
   const setField = (k, rerender) => (ev) => {
@@ -792,7 +842,7 @@ function settingsPage() {
     const f = ev.target.files[0];
     if (!f) return;
     const reader = new FileReader();
-    reader.onload = () => act(() => api('POST', '/api/logo', { dataUrl: reader.result }), 'Logo updated');
+    reader.onload = () => act(async () => { await api('POST', '/api/logo', { dataUrl: reader.result }); logoVersion++; }, 'Logo updated');
     reader.readAsDataURL(f);
   } });
 
@@ -801,7 +851,7 @@ function settingsPage() {
     form,
     h('div', { class: 'card', style: 'max-width:640px' },
       h('h2', null, 'Logo'),
-      s.logoFile ? h('img', { src: `/logo?v=${Date.now()}`, style: 'max-width:180px;max-height:140px;display:block;margin-bottom:12px' }) : h('p', { class: 'muted' }, 'No logo.'),
+      s.logoFile ? h('img', { src: `/logo?v=${logoVersion}`, style: 'max-width:180px;max-height:140px;display:block;margin-bottom:12px' }) : h('p', { class: 'muted' }, 'No logo.'),
       h('div', { class: 'actions' }, fileInput,
         h('button', { onclick: () => fileInput.click() }, s.logoFile ? 'Replace logo…' : 'Upload logo…'),
         s.logoFile && h('button', { class: 'danger', onclick: () => confirm('Remove the logo?') && act(() => api('POST', '/api/logo', { dataUrl: null }), 'Logo removed') }, 'Remove'))),
@@ -815,8 +865,17 @@ function settingsPage() {
 
 // ---------- router ----------
 
+let logoVersion = Date.now(); // bumped after each upload so the replaced file is fetched
+
 async function refresh() {
   S = await api('GET', '/api/state');
+  // Only touch the mark when the logo changes, so navigation and saves don't re-download it.
+  const mark = document.querySelector('.brand-mark');
+  const key = S.settings.logoFile ? `${S.settings.logoFile}:${logoVersion}` : '';
+  if (mark.dataset.logo === key) return;
+  mark.dataset.logo = key;
+  if (key) mark.replaceChildren(h('img', { src: `/logo?v=${logoVersion}`, alt: '', onerror: () => { mark.textContent = 'CW'; } }));
+  else mark.textContent = 'CW';
 }
 
 const routes = [
@@ -845,12 +904,22 @@ async function render() {
     const m = re.exec(path || '/');
     if (!m) continue;
     const navKey = typeof nav === 'function' ? nav(m) : nav;
-    document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === navKey));
+    document.querySelectorAll('[data-nav]').forEach((a) => {
+      const active = a.dataset.nav === navKey;
+      a.classList.toggle('active', active);
+      if (active) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    });
     document.getElementById('app').replaceChildren(view(m, new URLSearchParams(qs)));
+    scrollTables(document.getElementById('app'));
     return;
   }
   location.hash = '#/';
 }
 
+document.querySelector('.skip-link').addEventListener('click', (event) => {
+  event.preventDefault();
+  document.getElementById('app').focus();
+});
 window.addEventListener('hashchange', render);
 render();

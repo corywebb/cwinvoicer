@@ -1,0 +1,33 @@
+{
+  "generator": "Archify",
+  "version": "3.2.0",
+  "artifactId": "7fce3636ab4b4ac7889381559bd1042a",
+  "deliveryReceiptId": "29fa3370-9b4f-404e-b6a8-b7451ffc93b3",
+  "sourceRevision": "fc457a921296370eaf64edc01c12245c1bc74801",
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  },
+  "evidence": {
+    "verified": true,
+    "repository": "https://github.com/corywebb/cwinvoicer",
+    "revision": "fc457a921296370eaf64edc01c12245c1bc74801",
+    "references": 13
+  },
+  "browserCheck": "passed",
+  "visualReview": "Light and dark 1440x900 captures inspected; labels and routes are legible.",
+  "files": {
+    "architecture.json": {
+      "sha256": "cca11efb891a0c5bd6daffc9220753c7c4f60c8219827984fa75b6f41b915d89",
+      "bytes": 4676
+    },
+    "architecture.html": {
+      "sha256": "a06aba437209f46a14e87bc944b0878392201863a2ca36319910b3e8847eed0c",
+      "bytes": 819714
+    }
+  }
+}

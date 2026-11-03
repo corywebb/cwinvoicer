@@ -2,6 +2,8 @@
 const { app, BrowserWindow, Menu, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const printInvoicePage = require('./print-invoice');
+const loadHidden = require('./hidden-window');
 
 // Same support folder in development and in the packaged app.
 app.setPath('userData', path.join(app.getPath('appData'), 'CW Invoicer'));
@@ -27,14 +29,8 @@ let win = null;
 
 // ---------- PDF + printing (Electron's own Chromium, no Google Chrome needed) ----------
 
-async function loadHidden(url) {
-  const w = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
-  await w.loadURL(url);
-  return w;
-}
-
 async function renderPdf(url, outPath) {
-  const w = await loadHidden(url);
+  const w = await loadHidden(BrowserWindow, url);
   try {
     const pdf = await w.webContents.printToPDF({ printBackground: true, preferCSSPageSize: true });
     fs.writeFileSync(outPath, pdf);
@@ -44,8 +40,7 @@ async function renderPdf(url, outPath) {
 }
 
 async function printInvoice(id) {
-  const w = await loadHidden(`${baseUrl}/invoice/${id}`);
-  w.webContents.print({ printBackground: true }, () => w.destroy());
+  await printInvoicePage(`${baseUrl}/invoice/${id}`, { BrowserWindow, dialog });
 }
 
 async function openPdf(id) {
