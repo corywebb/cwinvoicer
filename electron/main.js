@@ -2,6 +2,7 @@
 const { app, BrowserWindow, Menu, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const printInvoicePage = require('./print-invoice');
 
 // Same support folder in development and in the packaged app.
 app.setPath('userData', path.join(app.getPath('appData'), 'CW Invoicer'));
@@ -44,8 +45,7 @@ async function renderPdf(url, outPath) {
 }
 
 async function printInvoice(id) {
-  const w = await loadHidden(`${baseUrl}/invoice/${id}`);
-  w.webContents.print({ printBackground: true }, () => w.destroy());
+  await printInvoicePage(`${baseUrl}/invoice/${id}`, { BrowserWindow, dialog });
 }
 
 async function openPdf(id) {
