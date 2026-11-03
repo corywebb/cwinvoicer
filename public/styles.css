@@ -154,7 +154,7 @@ code { overflow-wrap: anywhere; }
 #toast { z-index: 100; }
 @media (max-width: 1050px) {
   main { padding: 28px 24px 48px; }
-  .stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .stats-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
   .stats-grid .card { padding: 16px; }
   .stats-grid .stat { font-size: 26px; }
 }
