@@ -58,6 +58,7 @@ function toast(msg, isError = false) {
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const money = (n) => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const rateFmt = (n) => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const qtyFmt = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const usDate = (iso) => (iso ? `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}` : '');
 const today = () => new Date().toLocaleDateString('en-CA');
@@ -419,7 +420,7 @@ function entriesPage(type) {
               h('td', null, client(e.clientId)?.name, e.projectId && h('div', { class: 'muted small' }, project(e.projectId)?.name)),
               h('td', { class: 'desc' }, e.description),
               showQty && h('td', { class: 'num' }, qtyFmt(type === 'time' ? e.hours : e.qty)),
-              showQty && h('td', { class: 'num' }, money(type === 'time' ? timeRate(e) : e.rate), type === 'time' && e.rate != null && h('div', { class: 'muted small' }, 'override')),
+              showQty && h('td', { class: 'num' }, rateFmt(type === 'time' ? timeRate(e) : e.rate), type === 'time' && e.rate != null && h('div', { class: 'muted small' }, 'override')),
               h('td', { class: 'num' }, money(entryAmount(type, e))),
               h('td', null, inv ? h('a', { href: `#/invoices/${inv.id}` }, `#${inv.number}`) : h('span', { class: 'badge unbilled' }, 'Unbilled')),
               h('td', { class: 'nowrap right' },
@@ -518,7 +519,7 @@ function invoiceView(id) {
         { name: 'billToName', label: 'Bill to', required: true },
         { name: 'billToAddress', label: 'Bill-to address', type: 'textarea', rows: 2 },
         ...inv.lines.map((l) => ({ name: `line:${l.key}`, type: 'textarea', rows: l.type === 'heading' ? 1 : 2,
-          label: l.type === 'heading' ? 'Project heading' : `${l.date ? `${usDate(l.date)} · ` : ''}${qtyFmt(l.qty)} × ${money(l.rate)}` })),
+          label: l.type === 'heading' ? 'Project heading' : `${l.date ? `${usDate(l.date)} · ` : ''}${qtyFmt(l.qty)} × ${rateFmt(l.rate)}` })),
         { name: 'notes', label: 'Notes (printed at the bottom)', type: 'textarea', rows: 2 },
       ],
       onSubmit: (v) => api('PUT', `/api/invoices/${inv.id}`, {
@@ -628,7 +629,7 @@ function builderPage(query) {
               if (l.type === 'heading') return h('tr', null, h('td', { colspan: 4 }, input));
               return h('tr', null,
                 h('td', null, l.date && h('div', { class: 'muted small' }, usDate(l.date)), input),
-                h('td', { class: 'num' }, qtyFmt(l.qty)), h('td', { class: 'num' }, money(l.rate)), h('td', { class: 'num' }, money(l.amount)));
+                h('td', { class: 'num' }, qtyFmt(l.qty)), h('td', { class: 'num' }, rateFmt(l.rate)), h('td', { class: 'num' }, money(l.amount)));
             })))
         : h('div', { class: 'empty' }, 'Select time, line items or expenses above.'),
       h('div', { class: 'total-line' }, h('span', null, 'Balance due'), h('span', null, `$${money(total)}`)),
@@ -683,7 +684,7 @@ function builderPage(query) {
             h('td', { class: 'nowrap' }, usDate(e.date)),
             h('td', null, h('div', { class: 'desc' }, e.description), e.projectId && h('div', { class: 'muted small' }, project(e.projectId)?.name)),
             type !== 'expenses' && h('td', { class: 'num' }, qtyFmt(type === 'time' ? e.hours : e.qty)),
-            type !== 'expenses' && h('td', { class: 'num' }, money(type === 'time' ? timeRate(e) : e.rate)),
+            type !== 'expenses' && h('td', { class: 'num' }, rateFmt(type === 'time' ? timeRate(e) : e.rate)),
             h('td', { class: 'num' }, money(entryAmount(type, e))),
             h('td', { class: 'right' }, h('button', { class: 'link', onclick: async () => (await editEntry(type, e, {}, { lockClient: true })) && (renderSection(type), renderLines()) }, 'Edit'))))))
       : h('div', { class: 'empty small' }, `No unbilled ${TYPES[type].label.toLowerCase()} for this client.`));
