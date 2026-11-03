@@ -2,3 +2,8 @@ node_modules/
 *.tmp
 .DS_Store
 dist/
+
+# Local workspaces and browser verification artifacts
+data/
+output/
+.playwright-cli/
