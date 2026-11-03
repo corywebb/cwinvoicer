@@ -1,0 +1,33 @@
+{
+  "generator": "Archify",
+  "version": "3.2.0",
+  "artifactId": "06c1441a491b4139b59eaf419efbed70",
+  "deliveryReceiptId": "6ad4afdd-bb6c-426e-b731-263ac852f2da",
+  "sourceRevision": "fc457a921296370eaf64edc01c12245c1bc74801",
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  },
+  "evidence": {
+    "verified": true,
+    "repository": "https://github.com/corywebb/cwinvoicer",
+    "revision": "fc457a921296370eaf64edc01c12245c1bc74801",
+    "references": 6
+  },
+  "browserCheck": "passed",
+  "visualReview": "Light and dark 1440x900 captures inspected; transitions, labels and detail cards are legible.",
+  "files": {
+    "invoice-lifecycle.json": {
+      "sha256": "abb976082a1c0d5752c8624f1453d800be884a572b3c4b119b56206518f0de97",
+      "bytes": 2651
+    },
+    "invoice-lifecycle.html": {
+      "sha256": "7e10ec3549741c7e81d0aa80dd0896cce6bc70ccb230d866cca24e1966420f01",
+      "bytes": 809956
+    }
+  }
+}

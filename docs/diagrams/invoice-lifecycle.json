@@ -1,0 +1,122 @@
+{
+  "schema_version": 3,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "CW Invoicer \u00b7 From work to payment",
+    "output": "docs/diagrams/invoice-lifecycle.html",
+    "quality_profile": "showcase",
+    "locale": "en",
+    "repository": {
+      "url": "https://github.com/corywebb/cwinvoicer.git",
+      "revision": "fc457a921296370eaf64edc01c12245c1bc74801"
+    }
+  },
+  "mainPath": [
+    "work",
+    "unpaid",
+    "paid"
+  ],
+  "states": [
+    {
+      "id": "work",
+      "type": "start",
+      "label": "Unbilled work",
+      "sublabel": "Time, items, expenses",
+      "sources": [
+        {
+          "path": "server.js",
+          "line": 199,
+          "end_line": 219
+        }
+      ]
+    },
+    {
+      "id": "unpaid",
+      "type": "waiting",
+      "label": "Unpaid invoice",
+      "sublabel": "Billed work is locked",
+      "sources": [
+        {
+          "path": "server.js",
+          "line": 243,
+          "end_line": 258
+        },
+        {
+          "path": "server.js",
+          "line": 262,
+          "end_line": 279
+        },
+        {
+          "path": "public/app.js",
+          "line": 95,
+          "end_line": 102
+        }
+      ]
+    },
+    {
+      "id": "paid",
+      "type": "success",
+      "label": "Paid invoice",
+      "sublabel": "Payment date recorded",
+      "sources": [
+        {
+          "path": "server.js",
+          "line": 243,
+          "end_line": 258
+        },
+        {
+          "path": "server.js",
+          "line": 262,
+          "end_line": 279
+        }
+      ]
+    }
+  ],
+  "transitions": [
+    {
+      "from": "work",
+      "to": "unpaid",
+      "label": "Create invoice",
+      "note": "Select unbilled entries for one client"
+    },
+    {
+      "from": "unpaid",
+      "to": "paid",
+      "label": "Mark paid"
+    },
+    {
+      "from": "paid",
+      "to": "unpaid",
+      "label": "Mark unpaid",
+      "note": "Clear payment date"
+    },
+    {
+      "from": "unpaid",
+      "to": "work",
+      "label": "Delete invoice"
+    },
+    {
+      "from": "paid",
+      "to": "work",
+      "label": "Delete invoice"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "Overdue is computed",
+      "items": [
+        "An unpaid invoice is shown as overdue when its due date is before today.",
+        "Overdue is a display status, not a third stored payment state."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Deleting releases the work",
+      "items": [
+        "Deleting either a paid or unpaid invoice removes the invoice and its cached PDF.",
+        "Its source entries become unbilled; their locked billing rates are cleared."
+      ]
+    }
+  ]
+}
