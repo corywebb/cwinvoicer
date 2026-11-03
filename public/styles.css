@@ -181,3 +181,13 @@ code { overflow-wrap: anywhere; }
 
 .form-error { padding: 10px 12px; background: #fbe4e1; color: #942a20; border-radius: 6px; }
 .brand-mark img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* The ledger stays usable when date and client filters wrap on small screens. */
+.ledger-filters { align-items: end; }
+.ledger-filters .field { flex: 1 1 160px; margin: 0; min-width: 0; }
+.ledger-filters select { width: 100%; }
+.ledger-filters button { margin-bottom: 0; }
+.ledger-totals { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+@media (max-width: 700px) {
+  .ledger-totals { gap: 12px; }
+}

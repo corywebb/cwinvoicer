@@ -105,11 +105,7 @@ function entryAmount(type, e) {
   if (type === 'items') return round2(e.qty * e.rate);
   return round2(e.amount);
 }
-function invoiceStatus(inv) {
-  if (inv.status === 'paid') return 'paid';
-  if (inv.dueDate && inv.dueDate < today()) return 'overdue';
-  return 'unpaid';
-}
+const invoiceStatus = (inv) => InvoiceLedger.status(inv, today());
 const statusBadge = (inv) => {
   const s = invoiceStatus(inv);
   return h('span', { class: `badge ${s}` }, s === 'paid' ? `Paid ${usDate(inv.paidDate)}` : s === 'overdue' ? 'Overdue' : 'Unpaid');
@@ -453,22 +449,53 @@ function invoiceTable(list) {
       h('td', { class: 'num' }, `$${money(inv.total)}`), h('td', null, statusBadge(inv)))))));
 }
 
-const invoiceFilters = { status: 'all', client: '' };
+const invoiceFilters = { status: 'all', client: '', from: '', to: '' };
 function invoicesPage() {
-  const list = S.invoices
-    .filter((i) => (invoiceFilters.status === 'all' || invoiceStatus(i) === invoiceFilters.status || (invoiceFilters.status === 'unpaid' && i.status !== 'paid'))
-      && (!invoiceFilters.client || i.clientId === invoiceFilters.client))
-    .sort((a, b) => b.number - a.number);
-  const set = (k) => (ev) => ((invoiceFilters[k] = ev.target.value), render());
+  let list = [];
+  let error = '';
+  try { list = InvoiceLedger.select(S.invoices, invoiceFilters, today()); }
+  catch (e) { error = e.message; }
+  const totals = InvoiceLedger.totals(list, today());
+  const set = (k) => (ev) => { invoiceFilters[k] = ev.target.value; render(); };
+  const reset = () => { Object.assign(invoiceFilters, { status: 'all', client: '', from: '', to: '' }); render(); };
+  const exportButton = h('button', { disabled: !!error || !list.length, onclick: async () => {
+    exportButton.disabled = true;
+    try {
+      const csv = await api('GET', `/api/invoices/export.csv?${new URLSearchParams(invoiceFilters)}`);
+      const url = URL.createObjectURL(new Blob(['\uFEFF' + csv.replace(/^\uFEFF/, '')], { type: 'text/csv;charset=utf-8' }));
+      const link = h('a', { href: url, download: `cwinvoicer-invoices-${today()}.csv` });
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast('CSV download started');
+    } catch (e) { toast(e.message, true); }
+    finally { exportButton.disabled = false; }
+  } }, 'Export CSV');
+  // Archived clients still belong in the historical ledger.
+  const clients = S.clients.filter((c) => !c.archived || S.invoices.some((i) => i.clientId === c.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
   return h('div', null,
-    pageHead('Invoices', h('a', { class: 'btn', href: '#/invoices/activity' }, 'Activity log'), h('a', { class: 'btn primary', href: '#/invoices/new' }, '+ New invoice')),
-    h('div', { class: 'filters' },
-      h('select', { 'aria-label': 'Filter by client', onchange: set('client') }, h('option', { value: '' }, 'All clients'),
-        activeClients(invoiceFilters.client).map((c) => h('option', { value: c.id, selected: c.id === invoiceFilters.client }, c.name))),
-      h('select', { 'aria-label': 'Filter by status', onchange: set('status') },
-        [['all', 'All'], ['unpaid', 'Unpaid'], ['overdue', 'Overdue'], ['paid', 'Paid']].map(([v, l]) => h('option', { value: v, selected: v === invoiceFilters.status }, l))),
-      h('span', { class: 'muted', style: 'align-self:center' }, `${list.length} invoices · $${money(list.reduce((s, i) => s + i.total, 0))}`)),
-    invoiceTable(list));
+    pageHead('Invoices', h('a', { class: 'btn', href: '#/invoices/activity' }, 'Activity log'), exportButton, h('a', { class: 'btn primary', href: '#/invoices/new' }, '+ New invoice')),
+    h('p', { class: 'muted' }, 'Review your billing history and export the selected invoices to a spreadsheet.'),
+    h('div', { class: 'filters ledger-filters' },
+      h('label', { class: 'field' }, h('span', null, 'Client'),
+        h('select', { 'aria-label': 'Filter by client', onchange: set('client') }, h('option', { value: '' }, 'All clients'),
+          clients.map((c) => h('option', { value: c.id, selected: c.id === invoiceFilters.client }, c.name + (c.archived ? ' (archived)' : ''))))),
+      h('label', { class: 'field' }, h('span', null, 'Status'),
+        h('select', { 'aria-label': 'Filter by status', onchange: set('status') },
+          [['all', 'All'], ['unpaid', 'Unpaid (including overdue)'], ['overdue', 'Overdue'], ['paid', 'Paid']].map(([v, l]) => h('option', { value: v, selected: v === invoiceFilters.status }, l)))),
+      ['from', 'to'].map((key) => h('label', { class: 'field' }, h('span', null, key === 'from' ? 'From date' : 'To date'),
+        h('input', { type: 'date', value: invoiceFilters[key], onchange: set(key), 'aria-invalid': error ? 'true' : null, 'aria-describedby': error ? 'ledger-error' : null }))),
+      h('button', { onclick: reset }, 'Reset filters')),
+    h('p', { class: 'muted small' }, 'Dates filter the invoice date, including both endpoints. Paid totals describe these invoices, not payments received during the period.'),
+    error ? h('p', { id: 'ledger-error', role: 'alert', class: 'form-error' }, error) : [
+      h('div', { class: 'grid stats-grid ledger-totals', 'aria-label': 'Selected invoice totals' },
+        [['invoiced', 'Invoiced'], ['paid', 'Paid'], ['outstanding', 'Outstanding'], ['overdue', 'Overdue']].map(([key, label]) =>
+          h('div', { class: 'card' }, h('div', { class: 'muted small' }, label), h('div', { class: 'stat' }, `$${money(totals[key])}`)))),
+      h('p', { class: 'muted', role: 'status' }, `${list.length} ${list.length === 1 ? 'invoice' : 'invoices'} selected. Export CSV includes this selection.`),
+      list.length ? invoiceTable(list) : h('div', { class: 'card empty' }, S.invoices.length ? 'No invoices match these filters. Try a wider date range or reset the filters.' : 'No invoices yet.'),
+    ]);
 }
 
 // ---------- preview iframe (scaled to fit its box) ----------
