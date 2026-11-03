@@ -8,6 +8,8 @@ function fixture({ loadError, printError } = {}) {
   let options;
   let destroyed = false;
   let loaded;
+  let printCalled;
+  const printed = new Promise((resolve) => (printCalled = resolve));
   class BrowserWindow {
     async loadURL(url) {
       loaded = url;
@@ -18,6 +20,7 @@ function fixture({ loadError, printError } = {}) {
         if (printError) throw printError;
         options = settings;
         callback = done;
+        printCalled();
       },
     };
     isDestroyed() { return destroyed; }
@@ -26,6 +29,7 @@ function fixture({ loadError, printError } = {}) {
   return {
     dependencies: { BrowserWindow, dialog: { showErrorBox: (...args) => errors.push(args) } },
     errors,
+    printed, // resolves once print() is called, however many awaits come before it
     finish: (...args) => callback(...args),
     get options() { return options; },
     get destroyed() { return destroyed; },
@@ -38,7 +42,7 @@ const url = 'http://127.0.0.1:1234/invoice/test';
 test('printing requests a dialog and Letter paper, retaining its window until completion', async () => {
   const f = fixture();
   const pending = printInvoice(url, f.dependencies);
-  await Promise.resolve();
+  await f.printed;
   assert.equal(f.loaded, url);
   assert.deepEqual(f.options, { silent: false, printBackground: true, pageSize: 'Letter' });
   assert.equal(f.destroyed, false);
@@ -51,7 +55,7 @@ test('printing requests a dialog and Letter paper, retaining its window until co
 test('canceling the native print dialog closes the window without an error', async () => {
   const f = fixture();
   const pending = printInvoice(url, f.dependencies);
-  await Promise.resolve();
+  await f.printed;
   f.finish(false, 'Print job canceled');
   await pending;
   assert.equal(f.destroyed, true);
@@ -62,7 +66,7 @@ for (const reason of ['Invalid printer settings', '']) {
   test(`a print failure reports a PDF fallback and releases the window (${reason || 'no reason'})`, async () => {
     const f = fixture();
     const pending = printInvoice(url, f.dependencies);
-    await Promise.resolve();
+    await f.printed;
     f.finish(false, reason);
     await pending;
     assert.equal(f.destroyed, true);

@@ -1,9 +1,10 @@
+const loadHidden = require('./hidden-window');
+
 // Keep the temporary invoice window alive until the native print dialog finishes.
 module.exports = async function printInvoice(url, { BrowserWindow, dialog }) {
   let window;
   try {
-    window = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
-    await window.loadURL(url);
+    window = await loadHidden(BrowserWindow, url);
     await new Promise((resolve, reject) => {
       window.webContents.print(
         { silent: false, printBackground: true, pageSize: 'Letter' },
