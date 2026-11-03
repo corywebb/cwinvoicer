@@ -128,4 +128,63 @@ test('invoice lifecycle in an isolated data folder', { timeout: 20000 }, async (
     await request('POST', 'logo', { dataUrl: null });
     assert.equal(fs.existsSync(path.join(dataDir, 'logo.gif')), false);
   });
+
+  const pause = () => new Promise((r) => setTimeout(r, 5)); // so successive timestamps differ
+
+  await t.test('records get created and updated timestamps', async () => {
+    const c = await request('POST', 'clients', { name: 'Stamped' }, 201);
+    assert.match(c.createdAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(c.updatedAt, c.createdAt);
+    await pause();
+    const archived = await request('PUT', `clients/${c.id}`, { archived: true });
+    assert.equal(archived.createdAt, c.createdAt);
+    assert.ok(archived.updatedAt > c.createdAt);
+    const settings = await request('PUT', 'settings', { businessName: 'Stamped Co' });
+    assert.match(settings.updatedAt, /^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  await t.test('the invoice log records each action and outlives the invoice', async () => {
+    const c = await request('POST', 'clients', { name: 'Logged', rate: 100 }, 201);
+    const e1 = await request('POST', 'time', { clientId: c.id, date: '2026-03-01', description: 'One', hours: 1 }, 201);
+    const e2 = await request('POST', 'items', { clientId: c.id, date: '2026-03-02', description: 'Two', qty: 2, rate: 10 }, 201);
+    await pause();
+    const inv = await request('POST', 'invoices', { clientId: c.id, dueDate: '2026-03-15', sources: { time: [e1.id], items: [e2.id] } }, 201);
+    assert.equal(inv.updatedAt, inv.createdAt);
+    let state = await request('GET', 'state');
+    const billed = state.time.find((e) => e.id === e1.id);
+    assert.equal(billed.updatedAt, inv.createdAt, 'billing an entry updates it');
+
+    // Saving with nothing changed logs nothing and leaves updatedAt alone.
+    const same = await request('PUT', `invoices/${inv.id}`, { notes: null, dueDate: '2026-03-15' });
+    assert.equal(same.updatedAt, inv.updatedAt);
+
+    await pause();
+    const edited = await request('PUT', `invoices/${inv.id}`, { dueDate: '2026-03-30', notes: 'Thanks' });
+    assert.ok(edited.updatedAt > inv.updatedAt);
+    await request('PUT', `invoices/${inv.id}`, { format: 'detailed' });
+    await request('PUT', `invoices/${inv.id}`, { status: 'paid', paidDate: '2026-03-20' });
+    await request('PUT', `invoices/${inv.id}`, { status: 'unpaid' });
+    await request('POST', `invoices/${inv.id}/log`, { event: 'pdf-download' });
+    await request('POST', `invoices/${inv.id}/log`, { event: 'print' });
+    await request('POST', `invoices/${inv.id}/log`, { event: 'made-up' }, 400);
+    const noHeader = await fetch(`${base}/api/invoices/${inv.id}/log`, { method: 'POST', body: '{"event":"print"}' });
+    assert.equal(noHeader.status, 403);
+    // Viewing or printing through the GET links writes nothing.
+    await fetch(`${base}/invoice/${inv.id}?print`);
+    await request('DELETE', `invoices/${inv.id}`);
+
+    state = await request('GET', 'state');
+    const log = state.invoiceLog.filter((l) => l.invoiceId === inv.id).map(({ action, detail, number }) => [action, detail, number]);
+    assert.deepEqual(log, [
+      ['created', '$120.00 · 2 entries', inv.number],
+      ['edited', 'Due date 03/15/2026 → 03/30/2026; Notes', inv.number],
+      ['reformatted', 'Summary → Detailed', inv.number],
+      ['paid', 'Paid on 03/20/2026', inv.number],
+      ['unpaid', null, inv.number],
+      ['pdf', 'Downloaded PDF', inv.number],
+      ['print', 'Opened the print dialog', inv.number],
+      ['deleted', '$120.00 · 2 entries marked unbilled', inv.number],
+    ]);
+    assert.ok(state.time.find((e) => e.id === e1.id).updatedAt > billed.updatedAt, 'unbilling an entry updates it');
+  });
 });

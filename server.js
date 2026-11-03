@@ -77,7 +77,59 @@ function save(name, value) {
 function loadAll() {
   const db = { settings: { ...DEFAULT_SETTINGS, ...load('settings') } };
   for (const c of COLLECTIONS) db[c] = load(c);
+  db.invoiceLog = load('invoice-log');
   return db;
+}
+
+const now = () => new Date().toISOString();
+
+// ---------- invoice activity log ----------
+// Kept in its own file, not inside the invoices, so a deleted invoice keeps its history.
+
+const LOG_ACTIONS = ['created', 'edited', 'reformatted', 'paid', 'unpaid', 'pdf', 'print', 'deleted'];
+
+function logInvoice(db, inv, action, detail = null) {
+  if (!LOG_ACTIONS.includes(action)) throw new Error(`Unknown invoice action: ${action}`);
+  db.invoiceLog.push({ id: crypto.randomUUID(), invoiceId: inv.id, number: inv.number, at: now(), action, detail });
+  save('invoice-log', db.invoiceLog);
+}
+
+function recordInvoiceAction(id, action, detail) {
+  const db = loadAll();
+  const inv = db.invoices.find((i) => i.id === id);
+  if (!inv) throw new HttpError(404, 'Invoice not found');
+  logInvoice(db, inv, action, detail);
+}
+
+// Events the app reports when you click PDF and print buttons. The details are fixed here,
+// so the log only ever says what the server wrote.
+const CLIENT_EVENTS = {
+  'pdf-open': ['pdf', 'Opened PDF'],
+  'pdf-download': ['pdf', 'Downloaded PDF'],
+  print: ['print', 'Opened the print dialog'],
+};
+
+const usDate = (iso) => (iso ? `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}` : 'none');
+const dollars = (n) => `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const entryCount = (n) => `${n} ${n === 1 ? 'entry' : 'entries'}`;
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Describes what an edit changed, e.g. "Due date 01/15/2026 → 01/30/2026; Notes". Empty if nothing did. */
+function describeEdit(before, after) {
+  const changes = [];
+  const same = (a, b) => (a || null) === (b || null);
+  for (const [k, label] of [['date', 'Invoice date'], ['dueDate', 'Due date'], ['paidDate', 'Paid date']]) {
+    if (k === 'paidDate' && before.status !== after.status) continue; // covered by the paid/unpaid entry
+    if (!same(before[k], after[k])) changes.push(`${label} ${usDate(before[k])} → ${usDate(after[k])}`);
+  }
+  for (const [k, label] of [['terms', 'Terms'], ['notes', 'Notes']]) if (!same(before[k], after[k])) changes.push(label);
+  if (before.billTo?.name !== after.billTo?.name) changes.push('Bill to');
+  if (!same(before.billTo?.address, after.billTo?.address)) changes.push('Bill-to address');
+  if ((before.format || 'summary') === after.format) {
+    const renamed = after.lines.filter((l) => before.lines.find((b) => b.key === l.key)?.description !== l.description).length;
+    if (renamed) changes.push(`${renamed} line description${renamed === 1 ? '' : 's'}`);
+  }
+  return changes.join('; ');
 }
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -210,20 +262,22 @@ function createInvoice(body) {
   const draft = buildInvoice(db, body, entries);
   if (!draft.lines.length) throw new HttpError(400, 'Select at least one entry to invoice');
   const id = crypto.randomUUID();
-  const now = new Date().toISOString();
+  const stamp = now();
   const sources = Object.fromEntries(ENTRY_TYPES.map((t) => [t, entries[t].map((e) => e.id)]));
-  const invoice = { id, ...draft, sources, status: 'unpaid', paidDate: null, createdAt: now };
+  const invoice = { id, ...draft, sources, status: 'unpaid', paidDate: null, createdAt: stamp, updatedAt: stamp };
   for (const t of ENTRY_TYPES) {
     if (!entries[t].length) continue;
     for (const e of entries[t]) {
       // Lock in the hourly rate so later rate changes never alter a billed invoice.
       if (t === 'time') e.billedRate = timeRate(e, db);
-      Object.assign(e, { invoiceId: id, invoicedAt: now });
+      Object.assign(e, { invoiceId: id, invoicedAt: stamp, updatedAt: stamp });
     }
     save(t, db[t]);
   }
   db.invoices.push(invoice);
   save('invoices', db.invoices);
+  const billed = ENTRY_TYPES.reduce((n, t) => n + entries[t].length, 0);
+  logInvoice(db, invoice, 'created', `${dollars(invoice.total)} · ${entryCount(billed)}`);
   return invoice;
 }
 
@@ -235,6 +289,7 @@ function updateInvoice(id, body) {
   const db = loadAll();
   const inv = db.invoices.find((i) => i.id === id);
   if (!inv) throw new HttpError(404, 'Invoice not found');
+  const before = structuredClone(inv);
   for (const k of ['date', 'dueDate', 'paidDate']) if (k in body) inv[k] = isoDate(body[k], k);
   if (!inv.date) throw new HttpError(400, 'date is required');
   for (const k of ['terms', 'notes']) if (k in body) inv[k] = String(body[k] ?? '').trim() || null;
@@ -257,9 +312,17 @@ function updateInvoice(id, body) {
     inv.lines = linesFor(db, entries, inv);
     inv.total = sumLines(inv.lines);
   }
-  inv.updatedAt = new Date().toISOString();
+  const edited = describeEdit(before, inv);
+  const statusChanged = before.status !== inv.status;
+  const formatChanged = (before.format || 'summary') !== inv.format;
+  // Saving with nothing changed doesn't touch the invoice, its PDF or the log.
+  if (!edited && !statusChanged && !formatChanged && before.total === inv.total) return before;
+  inv.updatedAt = now();
   save('invoices', db.invoices);
   removePdf(inv);
+  if (statusChanged) logInvoice(db, inv, inv.status, inv.status === 'paid' ? `Paid on ${usDate(inv.paidDate)}` : null);
+  if (formatChanged) logInvoice(db, inv, 'reformatted', `${cap(before.format || 'summary')} → ${cap(inv.format)}`);
+  if (edited) logInvoice(db, inv, 'edited', edited);
   return inv;
 }
 
@@ -267,13 +330,17 @@ function deleteInvoice(id) {
   const db = loadAll();
   const inv = db.invoices.find((i) => i.id === id);
   if (!inv) throw new HttpError(404, 'Invoice not found');
+  const stamp = now();
+  let released = 0;
   for (const t of ENTRY_TYPES) {
     let changed = false;
     for (const e of db[t]) {
       if (e.invoiceId === id) {
         e.invoiceId = null;
         e.invoicedAt = null;
+        e.updatedAt = stamp;
         delete e.billedRate;
+        released++;
         changed = true;
       }
     }
@@ -281,6 +348,7 @@ function deleteInvoice(id) {
   }
   save('invoices', db.invoices.filter((i) => i !== inv));
   removePdf(inv);
+  logInvoice(db, inv, 'deleted', `${dollars(inv.total)} · ${entryCount(released)} marked unbilled`);
 }
 
 const pdfPath = (inv) => path.join(PDF_DIR, `Invoice_${inv.number}.pdf`);
@@ -424,6 +492,7 @@ async function handleApi(req, res, url) {
     const db = loadAll();
     const settings = clean('settings', body, db.settings, db);
     if (settings.startingInvoiceNumber < 1) throw new HttpError(400, 'Starting invoice number must be positive');
+    settings.updatedAt = now();
     save('settings', settings);
     return send(res, 200, settings);
   }
@@ -442,6 +511,7 @@ async function handleApi(req, res, url) {
     const db = loadAll();
     const oldFile = db.settings.logoFile;
     db.settings.logoFile = newFile;
+    db.settings.updatedAt = now();
     save('settings', db.settings);
     if (oldFile && oldFile !== newFile) fs.rmSync(path.join(DATA, oldFile), { force: true });
     return send(res, 200, db.settings);
@@ -457,6 +527,14 @@ async function handleApi(req, res, url) {
     if (method === 'PUT' && id) return send(res, 200, updateInvoice(id, body));
     if (method === 'DELETE' && id) {
       deleteInvoice(id);
+      return send(res, 200, { ok: true });
+    }
+    // The app reports PDF and print clicks here. It's a POST (so it needs the app header)
+    // rather than a side effect of the GET links, so other sites can't write to the log.
+    if (method === 'POST' && id && action === 'log') {
+      const event = CLIENT_EVENTS[body.event];
+      if (!event) throw new HttpError(400, 'Unknown event');
+      recordInvoiceAction(id, ...event);
       return send(res, 200, { ok: true });
     }
     // Opening a PDF is a GET (it's a link). Revealing it in Finder must be a POST, so it
@@ -480,8 +558,8 @@ async function handleApi(req, res, url) {
     const list = db[first];
 
     if (method === 'POST' && !id) {
-      const now = new Date().toISOString();
-      const record = { id: crypto.randomUUID(), ...clean(first, body, {}, db), createdAt: now };
+      const stamp = now();
+      const record = { id: crypto.randomUUID(), ...clean(first, body, {}, db), createdAt: stamp, updatedAt: stamp };
       if (ENTRY_TYPES.includes(first)) record.invoiceId = null;
       list.push(record);
       save(first, list);
@@ -496,7 +574,7 @@ async function handleApi(req, res, url) {
       throw new HttpError(409, `This was billed on invoice #${invoiceNumber(db, record.invoiceId)}. Delete that invoice first to change it.`);
 
     if (method === 'PUT') {
-      list[idx] = { ...clean(first, body, record, db), updatedAt: new Date().toISOString() };
+      list[idx] = { ...clean(first, body, record, db), updatedAt: now() };
       save(first, list);
       return send(res, 200, list[idx]);
     }

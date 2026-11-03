@@ -66,6 +66,13 @@ function addDays(iso, days) {
   d.setDate(d.getDate() + Number(days || 0));
   return d.toLocaleDateString('en-CA');
 }
+const dateTime = (iso) => new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+/** "Created Nov 3, 2026, 2:15 PM · Updated Nov 4, 2026, 9:02 AM". Records from before timestamps say so. */
+function stamps(r) {
+  if (!r?.createdAt) return r?.updatedAt ? `Updated ${dateTime(r.updatedAt)} · created before timestamps were recorded` : 'Created before timestamps were recorded';
+  const updated = r.updatedAt && r.updatedAt !== r.createdAt ? ` · Updated ${dateTime(r.updatedAt)}` : '';
+  return `Created ${dateTime(r.createdAt)}${updated}`;
+}
 const byDate = (a, b) => (a.date || '').localeCompare(b.date || '') || (a.createdAt || '').localeCompare(b.createdAt || '');
 
 /** Accepts "1.5", "1:30", "90m", "2h". Returns hours as a number, or NaN. */
@@ -120,7 +127,7 @@ const TYPES = {
  * spec: { name, label, type: text|textarea|number|date|select|hours|checkbox, options(vals), required,
  *         placeholder (string | fn(vals)), help, disabled, step }
  */
-function formModal({ title, fields, values = {}, submitLabel = 'Save', onSubmit }) {
+function formModal({ title, meta, fields, values = {}, submitLabel = 'Save', onSubmit }) {
   const vals = { ...values };
   const controls = [];
 
@@ -218,6 +225,7 @@ function formModal({ title, fields, values = {}, submitLabel = 'Save', onSubmit 
         },
       },
       h('h2', { id: 'modal-title' }, title),
+      meta && h('p', { class: 'muted small form-meta' }, meta),
       h('p', { class: 'form-error', role: 'alert', hidden: true }),
       fields.map((f) => (Array.isArray(f) ? h('div', { class: 'row' }, f.map(fieldEl)) : fieldEl(f))),
       h('div', { class: 'foot' }, h('button', { type: 'button', onclick: () => close(null) }, 'Cancel'), h('button', { class: 'primary', type: 'submit' }, submitLabel))
@@ -295,6 +303,7 @@ async function editEntry(type, existing, preset = {}, { lockClient = false } = {
     : { date: today(), qty: 1, ...preset, rate: preset.rate ?? '' };
   return formModal({
     title: `${isEdit ? 'Edit' : 'Add'} ${TYPES[type].one}`,
+    meta: isEdit && stamps(existing),
     fields: entryFields(type, lockClient),
     values,
     submitLabel: isEdit ? 'Save' : 'Add',
@@ -451,7 +460,7 @@ function invoicesPage() {
     .sort((a, b) => b.number - a.number);
   const set = (k) => (ev) => ((invoiceFilters[k] = ev.target.value), render());
   return h('div', null,
-    pageHead('Invoices', h('a', { class: 'btn primary', href: '#/invoices/new' }, '+ New invoice')),
+    pageHead('Invoices', h('a', { class: 'btn', href: '#/invoices/activity' }, 'Activity log'), h('a', { class: 'btn primary', href: '#/invoices/new' }, '+ New invoice')),
     h('div', { class: 'filters' },
       h('select', { 'aria-label': 'Filter by client', onchange: set('client') }, h('option', { value: '' }, 'All clients'),
         activeClients(invoiceFilters.client).map((c) => h('option', { value: c.id, selected: c.id === invoiceFilters.client }, c.name))),
@@ -530,6 +539,17 @@ function invoiceView(id) {
     if (saved) (toast('Invoice updated'), render());
   };
   const reveal = () => api('POST', `/api/invoices/${inv.id}/reveal`).catch((e) => toast(e.message, true));
+  // PDF and print are plain links, so their clicks are reported separately. Only the
+  // Activity card is redrawn, so the preview doesn't reload.
+  const activity = h('div', { class: 'card', style: 'margin-top:16px;max-width:900px' });
+  const drawActivity = () => activity.replaceChildren(h('h2', null, 'Activity'),
+    activityTable(S.invoiceLog.filter((l) => l.invoiceId === inv.id), { showInvoice: false }));
+  const logEvent = (event) => () => {
+    api('POST', `/api/invoices/${inv.id}/log`, { event })
+      .then(refresh).then(drawActivity)
+      .catch((e) => toast(e.message, true));
+  };
+  drawActivity();
   const reformat = (change) => act(() => api('PUT', `/api/invoices/${inv.id}`, change));
 
   const frame = h('iframe', { src: `/invoice/${inv.id}?v=${Date.now()}`, title: 'Invoice preview' });
@@ -538,22 +558,52 @@ function invoiceView(id) {
   return h('div', { class: 'invoice-view' },
     pageHead(`Invoice #${inv.number}`,
       statusBadge(inv),
-      S.pdfAvailable && h('a', { class: 'btn primary', href: pdfUrl(false), target: '_blank' }, 'Open PDF'),
-      S.pdfAvailable && h('a', { class: 'btn', href: pdfUrl(true) }, 'Download PDF'),
+      S.pdfAvailable && h('a', { class: 'btn primary', href: pdfUrl(false), target: '_blank', onclick: logEvent('pdf-open') }, 'Open PDF'),
+      S.pdfAvailable && h('a', { class: 'btn', href: pdfUrl(true), onclick: logEvent('pdf-download') }, 'Download PDF'),
       S.pdfAvailable && h('button', { onclick: reveal }, 'Show in Finder'),
-      h('a', { class: 'btn', href: `/invoice/${inv.id}?print`, target: '_blank' }, 'Print'),
+      h('a', { class: 'btn', href: `/invoice/${inv.id}?print`, target: '_blank', onclick: logEvent('print') }, 'Print'),
       h('button', { onclick: togglePaid }, inv.status === 'paid' ? 'Mark unpaid' : 'Mark paid'),
       h('button', { onclick: edit }, 'Edit'),
       h('button', { class: 'danger', onclick: remove }, 'Delete')),
     h('div', { class: 'page-head', style: 'margin-bottom:12px;max-width:900px' },
-      h('span', { class: 'muted' }, `${inv.billTo?.name} · $${money(inv.total)} · created ${new Date(inv.createdAt).toLocaleString()}`),
+      h('span', { class: 'muted' }, `${inv.billTo?.name} · $${money(inv.total)} · ${stamps(inv)}`),
       formatControls({ format: inv.format || 'summary' }, reformat)),
     previewBox(frame),
     sourceRows.length > 0 && h('div', { class: 'card', style: 'margin-top:16px;max-width:900px' },
       h('h2', null, 'Billed on this invoice'),
       h('table', { class: 'data' }, h('tbody', null, sourceRows.map(({ t, e }) => h('tr', null,
         h('td', { class: 'nowrap' }, usDate(e.date)), h('td', null, TYPES[t].one), h('td', { class: 'desc' }, e.description),
-        h('td', { class: 'num' }, t === 'time' ? `${qtyFmt(e.hours)} h` : ''), h('td', { class: 'num' }, money(entryAmount(t, e)))))))));
+        h('td', { class: 'num' }, t === 'time' ? `${qtyFmt(e.hours)} h` : ''), h('td', { class: 'num' }, money(entryAmount(t, e)))))))),
+    activity);
+}
+
+// ---------- invoice activity ----------
+
+const ACTION_LABELS = {
+  created: 'Created', edited: 'Edited', reformatted: 'Format changed', paid: 'Marked paid', unpaid: 'Marked unpaid',
+  pdf: 'PDF', print: 'Print', deleted: 'Deleted',
+};
+
+function activityTable(log, { showInvoice }) {
+  if (!log.length) return h('p', { class: 'muted' }, 'No activity recorded yet. Actions are logged from this version on.');
+  // The log is stored oldest first; reversing before the (stable) sort keeps same-millisecond entries newest first.
+  const rows = log.slice().reverse().sort((a, b) => b.at.localeCompare(a.at));
+  return h('div', { class: 'table-scroll' }, h('table', { class: 'data' },
+    h('thead', null, h('tr', null, h('th', null, 'When'), showInvoice && h('th', null, 'Invoice'), h('th', null, 'Action'), h('th', null, 'Details'))),
+    h('tbody', null, rows.map((l) => h('tr', null,
+      h('td', { class: 'nowrap' }, dateTime(l.at)),
+      showInvoice && h('td', { class: 'nowrap' }, invoice(l.invoiceId)
+        ? h('a', { href: `#/invoices/${l.invoiceId}` }, `#${l.number}`)
+        : h('span', { class: 'muted' }, `#${l.number} (deleted)`)),
+      h('td', { class: 'nowrap' }, ACTION_LABELS[l.action] || l.action),
+      h('td', { class: 'desc' }, l.detail || ''))))));
+}
+
+function activityPage() {
+  return h('div', null,
+    pageHead('Invoice activity', h('a', { class: 'btn', href: '#/invoices' }, 'Back to invoices')),
+    h('p', { class: 'page-intro' }, 'Everything done to your invoices, newest first, including invoices that were deleted.'),
+    h('div', { class: 'card' }, activityTable(S.invoiceLog, { showInvoice: true })));
 }
 
 // ---------- invoice builder ----------
@@ -755,12 +805,12 @@ async function saveRecord(kind, existing, values) {
 }
 
 async function editClient(c) {
-  const saved = await formModal({ title: c ? 'Edit client' : 'Add client', fields: clientFields, values: c || {},
+  const saved = await formModal({ title: c ? 'Edit client' : 'Add client', meta: c && stamps(c), fields: clientFields, values: c || {},
     onSubmit: (v) => saveRecord('clients', c, { name: v.name, address: v.address, email: v.email, rate: v.rate, notes: v.notes }) });
   if (saved) render();
 }
 async function editProject(p, clientId) {
-  const saved = await formModal({ title: p ? 'Edit project' : `Add project for ${client(clientId).name}`, fields: projectFields,
+  const saved = await formModal({ title: p ? 'Edit project' : `Add project for ${client(clientId).name}`, meta: p && stamps(p), fields: projectFields,
     values: p || { clientId }, onSubmit: (v) => saveRecord('projects', p, { clientId, name: v.name, rate: v.rate }) });
   if (saved) render();
 }
@@ -883,6 +933,7 @@ const routes = [
   [/^\/(time|items|expenses)$/, (m) => entriesPage(m[1]), (m) => m[1]],
   [/^\/invoices$/, () => invoicesPage(), 'invoices'],
   [/^\/invoices\/new$/, (m, q) => builderPage(q), 'invoices'],
+  [/^\/invoices\/activity$/, () => activityPage(), 'invoices'],
   [/^\/invoices\/([\w-]+)$/, (m) => invoiceView(m[1]), 'invoices'],
   [/^\/clients$/, () => clientsPage(), 'clients'],
   [/^\/settings$/, () => settingsPage(), 'settings'],

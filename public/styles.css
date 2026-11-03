@@ -96,6 +96,7 @@ table.data tr.off td { color: var(--muted); }
 .dialog-shell::backdrop { background: rgba(20, 27, 22, .5); }
 .modal { background: #fff; border-radius: 10px; width: 520px; max-width: 100%; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,.25); }
 .modal h2 { margin-bottom: 16px; }
+.modal .form-meta { margin: -10px 0 14px; }
 .modal .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 
 #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 8px; z-index: 100; max-width: 90vw; }
