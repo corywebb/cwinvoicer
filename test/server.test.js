@@ -43,6 +43,14 @@ test('invoice lifecycle in an isolated data folder', { timeout: 20000 }, async (
     await request('POST', 'invoices', { clientId: client.id, sources: {} }, 400);
     await request('POST', 'invoices', { clientId: other.id, sources: { time: [entry.id] } }, 400);
   });
+  await t.test('invoice dates must be YYYY-MM-DD', async () => {
+    for (const date of [20260101, 'Jan 1 2026', '2026-1-1']) {
+      await request('POST', 'invoices', { clientId: client.id, date, sources: { time: [entry.id] } }, 400);
+      await request('POST', 'invoices/preview', { clientId: client.id, date, sources: { time: [entry.id] } }, 400);
+    }
+    await request('POST', 'invoices', { clientId: client.id, dueDate: 'soon', sources: { time: [entry.id] } }, 400);
+    assert.equal((await request('GET', 'state')).time[0].invoiceId, null, 'a rejected invoice bills nothing');
+  });
   await t.test('creating an invoice locks entries against rebilling and editing', async () => {
     invoice = await request('POST', 'invoices', { clientId: client.id, sources: { time: [entry.id] } }, 201);
     assert.equal(invoice.total, 250);

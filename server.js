@@ -83,6 +83,13 @@ function loadAll() {
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const today = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
 
+/** Returns a YYYY-MM-DD string or null, or throws a 400 naming the field. */
+function isoDate(value, key) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new HttpError(400, `${key} must be a date (YYYY-MM-DD)`);
+  return value;
+}
+
 function nextInvoiceNumber(db) {
   const max = db.invoices.reduce((m, i) => Math.max(m, Number(i.number) || 0), 0);
   return Math.max(Number(db.settings.startingInvoiceNumber) || 1, max + 1);
@@ -185,8 +192,8 @@ function buildInvoice(db, body, entries) {
   return {
     number: nextInvoiceNumber(db),
     clientId: client.id,
-    date: body.date || today(),
-    dueDate: body.dueDate || null,
+    date: isoDate(body.date, 'date') || today(),
+    dueDate: isoDate(body.dueDate, 'dueDate'),
     terms: String(body.terms ?? '').trim() || null,
     notes: String(body.notes ?? '').trim() || null,
     billTo: { name: client.name, address: client.address || null },
@@ -228,11 +235,7 @@ function updateInvoice(id, body) {
   const db = loadAll();
   const inv = db.invoices.find((i) => i.id === id);
   if (!inv) throw new HttpError(404, 'Invoice not found');
-  for (const k of ['date', 'dueDate', 'paidDate']) {
-    if (!(k in body)) continue;
-    if (body[k] && !/^\d{4}-\d{2}-\d{2}$/.test(body[k])) throw new HttpError(400, `${k} must be a date`);
-    inv[k] = body[k] || null;
-  }
+  for (const k of ['date', 'dueDate', 'paidDate']) if (k in body) inv[k] = isoDate(body[k], k);
   if (!inv.date) throw new HttpError(400, 'date is required');
   for (const k of ['terms', 'notes']) if (k in body) inv[k] = String(body[k] ?? '').trim() || null;
   if (body.billTo) {
@@ -281,6 +284,23 @@ function deleteInvoice(id) {
 }
 
 const pdfPath = (inv) => path.join(PDF_DIR, `Invoice_${inv.number}.pdf`);
+const TEMPLATE_FILE = require.resolve('./lib/invoice-template');
+const mtime = (p) => {
+  try {
+    return fs.statSync(p).mtimeMs;
+  } catch {
+    return 0;
+  }
+};
+
+/** A saved PDF is current if it is newer than the invoice, the settings, the logo and the template. */
+function pdfIsCurrent(inv, settings) {
+  const made = mtime(pdfPath(inv));
+  if (!made) return false;
+  const inputs = [Date.parse(inv.updatedAt || inv.createdAt) || 0, mtime(file('settings')), mtime(TEMPLATE_FILE)];
+  if (settings.logoFile) inputs.push(mtime(path.join(DATA, settings.logoFile)));
+  return inputs.every((t) => made >= t);
+}
 function removePdf(inv) {
   fs.rmSync(pdfPath(inv), { force: true });
 }
@@ -296,21 +316,41 @@ const CHROME_CANDIDATES = [
 ].filter(Boolean);
 const findChrome = () => CHROME_CANDIDATES.find((p) => fs.existsSync(p));
 
-async function makePdf(inv) {
+// One render per invoice at a time; a second request for the same PDF waits for the first.
+const rendering = new Map();
+function makePdf(inv) {
+  if (!rendering.has(inv.id)) rendering.set(inv.id, renderToFile(inv).finally(() => rendering.delete(inv.id)));
+  return rendering.get(inv.id);
+}
+
+// Renders to a temporary file and renames it over the old PDF only on success, so a failed
+// or timed-out render never leaves the previous PDF looking like a fresh one.
+async function renderToFile(inv) {
   fs.mkdirSync(PDF_DIR, { recursive: true });
   const out = pdfPath(inv);
-  const url = `http://${HOST}:${PORT}/invoice/${inv.id}`;
+  const tmp = path.join(PDF_DIR, `.Invoice_${inv.number}.${crypto.randomUUID()}.pdf`);
+  try {
+    await renderWith(`http://${HOST}:${PORT}/invoice/${inv.id}`, tmp);
+    fs.renameSync(tmp, out);
+    return out;
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
+}
+
+async function renderWith(url, out) {
   if (renderPdf) {
     try {
-      await renderPdf(url, out);
-      return out;
+      return await renderPdf(url, out);
     } catch (e) {
       throw new HttpError(500, `PDF export failed: ${e.message}`);
     }
   }
   const chrome = findChrome();
   if (!chrome) throw new HttpError(501, 'No Chrome-based browser found for PDF export. Use Print → Save as PDF instead.');
-  const profile = path.join(os.tmpdir(), 'cwinvoicer-chrome');
+  // A fresh profile per export: Chrome hands off to any process already using a profile,
+  // so a shared one makes simultaneous exports fail.
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'cwinvoicer-chrome-'));
   const args = [
     '--headless',
     '--disable-gpu',
@@ -324,8 +364,9 @@ async function makePdf(inv) {
   ];
   return new Promise((resolve, reject) => {
     execFile(chrome, args, { timeout: 45000 }, (err, _stdout, stderr) => {
-      if (fs.existsSync(out)) return resolve(out);
-      reject(new HttpError(500, `PDF export failed: ${err?.message || stderr}`));
+      fs.rmSync(profile, { recursive: true, force: true });
+      if (!err && fs.existsSync(out)) return resolve();
+      reject(new HttpError(500, `PDF export failed: ${err?.message || stderr || 'no file was written'}`));
     });
   });
 }
@@ -418,14 +459,17 @@ async function handleApi(req, res, url) {
       deleteInvoice(id);
       return send(res, 200, { ok: true });
     }
-    if (id && (action === 'pdf' || action === 'reveal')) {
-      const inv = loadAll().invoices.find((i) => i.id === id);
-      if (!inv) throw new HttpError(404, 'Invoice not found');
-      const out = await pdfFor(inv.id, url.searchParams.get('fresh') === '1');
-      if (action === 'reveal') {
-        revealFile(out);
-        return send(res, 200, { ok: true, path: out });
-      }
+    // Opening a PDF is a GET (it's a link). Revealing it in Finder must be a POST, so it
+    // always carries the app header and another site can't trigger it.
+    if (id && action === 'reveal') {
+      if (method !== 'POST') throw new HttpError(405, 'Use POST');
+      const out = await pdfFor(id);
+      revealFile(out);
+      return send(res, 200, { ok: true, path: out });
+    }
+    if (id && action === 'pdf') {
+      if (method !== 'GET') throw new HttpError(405, 'Use GET');
+      const out = await pdfFor(id, url.searchParams.get('fresh') === '1');
       const disposition = url.searchParams.get('download') === '1' ? 'attachment' : 'inline';
       return sendFile(res, out, { 'Content-Disposition': `${disposition}; filename="${path.basename(out)}"` });
     }
@@ -472,11 +516,12 @@ async function handleApi(req, res, url) {
   throw new HttpError(404, 'Unknown API route');
 }
 
-/** Returns the path of an invoice's PDF, making it first if needed (or if `fresh`). */
+/** Returns the path of an invoice's PDF, making it first if it is missing or out of date (or if `fresh`). */
 async function pdfFor(id, fresh = false) {
-  const inv = loadAll().invoices.find((i) => i.id === id);
+  const db = loadAll();
+  const inv = db.invoices.find((i) => i.id === id);
   if (!inv) throw new HttpError(404, 'Invoice not found');
-  return fs.existsSync(pdfPath(inv)) && !fresh ? pdfPath(inv) : makePdf(inv);
+  return !fresh && pdfIsCurrent(inv, db.settings) ? pdfPath(inv) : makePdf(inv);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -537,7 +582,9 @@ function start(opts = {}) {
   });
 }
 
-module.exports = { start, pdfFor, dataDir: () => DATA };
+const stop = () => new Promise((resolve) => server.close(resolve));
+
+module.exports = { start, stop, pdfFor, dataDir: () => DATA };
 
 /** The desktop app's data folder (from its config.json), so browser mode uses the same data. */
 function appDataDir() {

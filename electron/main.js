@@ -45,7 +45,7 @@ async function printInvoice(id) {
 
 async function openPdf(id) {
   try {
-    const file = await server.pdfFor(id, true);
+    const file = await server.pdfFor(id);
     const err = await shell.openPath(file);
     if (err) throw new Error(err);
   } catch (e) {

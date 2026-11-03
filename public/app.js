@@ -492,7 +492,7 @@ function invoiceView(id) {
   const inv = invoice(id);
   if (!inv) return h('div', { class: 'card empty' }, 'Invoice not found. ', h('a', { href: '#/invoices' }, 'Back to invoices'));
   const isLatest = inv.number === Math.max(...S.invoices.map((i) => i.number));
-  const pdfUrl = (dl) => `/api/invoices/${inv.id}/pdf?fresh=1${dl ? '&download=1' : ''}`;
+  const pdfUrl = (dl) => `/api/invoices/${inv.id}/pdf${dl ? '?download=1' : ''}`;
 
   const togglePaid = async () => {
     await api('PUT', `/api/invoices/${inv.id}`, { status: inv.status === 'paid' ? 'unpaid' : 'paid' });
