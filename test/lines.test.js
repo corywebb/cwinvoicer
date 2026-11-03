@@ -52,3 +52,16 @@ test('invoice HTML escapes user text and omits an absent logo', () => {
   assert.ok(!html.includes('<script>'));
   assert.ok(!html.includes('src="/logo"'));
 });
+
+test('line amounts match entry amounts: the rate is not rounded before multiplying', () => {
+  const items = [{ id: 'i', clientId: 'c', projectId: 'p', date: '2026-01-01', description: 'Prints', qty: 100, rate: 0.125 }];
+  const time = [{ id: 't', clientId: 'c', date: '2026-01-02', description: 'Work', hours: 2.5, rate: 112.505 }];
+  const detailed = buildLines({ format: 'detailed', items, time }, db).filter((l) => l.type !== 'heading');
+  assert.deepEqual(detailed.map((l) => [l.rate, l.amount]), [[0.125, 12.5], [112.505, 281.26]]);
+  const summary = buildLines({ format: 'summary', items, time }, db);
+  assert.deepEqual(summary.map((l) => l.amount).sort(), [12.5, 281.26]);
+  // The invoice shows the rate's real precision, so qty × rate visibly equals the amount.
+  const html = renderInvoice({ number: 1, date: '2026-01-01', billTo: { name: 'C' }, from: {}, lines: detailed, total: 293.76 }, {});
+  assert.match(html, />0\.125</);
+  assert.match(html, />112\.505</);
+});

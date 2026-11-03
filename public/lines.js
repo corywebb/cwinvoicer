@@ -63,7 +63,7 @@
         const key = `extras:${o.e.projectId}`;
         if (!extras.has(key)) extras.set(key, { key, type: o.type, projectId: o.e.projectId, qty: 1, rate: 0, types: new Set() });
         const g = extras.get(key);
-        g.rate = round2(g.rate + o.qty * o.rate);
+        g.rate = round2(g.rate + round2(o.qty * o.rate)); // sum of each entry's own rounded amount
         g.types.add(o.type);
       }
       const emit = (projectId) => {
@@ -90,7 +90,8 @@
         l.amount = 0;
         continue;
       }
-      l.rate = round2(l.rate);
+      // Round only the amount, as each entry's own amount is rounded, so the invoice
+      // matches the totals shown elsewhere. The rate keeps its precision.
       l.amount = round2(l.qty * l.rate);
     }
     return lines;
