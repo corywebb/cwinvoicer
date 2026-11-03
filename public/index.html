@@ -5,12 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-src 'self'">
   <title>CW Invoicer</title>
-  <link rel="icon" href="/logo">
+  <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <nav class="sidebar">
-    <a class="brand" href="#/"><img src="/logo" alt=""><span>Invoicer</span></a>
+  <a class="skip-link" href="#app">Skip to content</a>
+  <nav class="sidebar" aria-label="Main navigation">
+    <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true">CW</span><span>Invoicer<small>YOUR WORK. ON RECORD.</small></span></a>
+    <span class="nav-label">Workspace</span>
     <a href="#/" data-nav="dashboard">Dashboard</a>
     <a href="#/time" data-nav="time">Time</a>
     <a href="#/items" data-nav="items">Line Items</a>
@@ -19,9 +21,10 @@
     <a href="#/clients" data-nav="clients">Clients &amp; Projects</a>
     <a href="#/settings" data-nav="settings">Settings</a>
     <a class="cta" href="#/invoices/new">+ New Invoice</a>
+    <div class="sidebar-foot"><span class="local-dot" aria-hidden="true"></span> Local by design<small>Your files. Your business.</small></div>
   </nav>
-  <main id="app"></main>
-  <div id="toast" hidden></div>
+  <main id="app" tabindex="-1"></main>
+  <div id="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
   <script src="/lines.js"></script>
   <script src="/app.js"></script>
 </body>
