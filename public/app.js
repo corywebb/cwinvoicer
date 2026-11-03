@@ -46,12 +46,6 @@ async function api(method, url, body) {
 
 let toastTimer;
 function toast(msg, isError = false) {
-  const formError = document.querySelector('dialog[open] .form-error');
-  if (isError && formError) {
-    formError.textContent = msg;
-    formError.hidden = false;
-    return;
-  }
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.className = isError ? 'error' : '';
@@ -172,11 +166,26 @@ function formModal({ title, fields, values = {}, submitLabel = 'Save', onSubmit 
 
   return new Promise((resolve) => {
     let saving = false;
+    let closing = false;
+    let pressedOutside = false;
     const close = (result) => {
-      if (saving) return;
+      if (saving || closing) return;
+      closing = true;
       backdrop.close();
       backdrop.remove();
       resolve(result);
+    };
+    const showError = (msg) => {
+      const el = form.querySelector('.form-error');
+      el.textContent = msg;
+      el.hidden = false;
+    };
+    // The <dialog> is the hit target for its ::backdrop and its own scrollbar, so test
+    // the pointer position, not just the target.
+    const outside = (e) => {
+      if (e.target !== backdrop) return false;
+      const r = backdrop.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
     };
     const form = h(
       'form',
@@ -190,22 +199,22 @@ function formModal({ title, fields, values = {}, submitLabel = 'Save', onSubmit 
           form.querySelector('.form-error').hidden = true;
           read();
           const bad = controls.find(({ spec }) => spec.type === 'hours' && Number.isNaN(vals[spec.name]));
-          if (bad) return toast(`${bad.spec.label}: enter hours like 1.5, 1:30 or 90m`, true);
+          if (bad) return showError(`${bad.spec.label}: enter hours like 1.5, 1:30 or 90m`);
           const submit = form.querySelector('[type=submit]');
           saving = true;
           submit.disabled = true;
           submit.textContent = 'Saving…';
+          let result;
           try {
-            const result = await onSubmit(vals);
-            saving = false;
-            close(result);
+            result = await onSubmit(vals);
           } catch (e) {
-            toast(e.message, true);
-          } finally {
             saving = false;
             submit.disabled = false;
             submit.textContent = submitLabel;
+            return showError(e.message);
           }
+          saving = false;
+          close(result);
         },
       },
       h('h2', { id: 'modal-title' }, title),
@@ -215,7 +224,15 @@ function formModal({ title, fields, values = {}, submitLabel = 'Save', onSubmit 
     );
     const backdrop = h('dialog', { class: 'dialog-shell', 'aria-labelledby': 'modal-title',
       oncancel: (e) => { e.preventDefault(); close(null); },
-      onclick: (e) => e.target === backdrop && close(null) }, form);
+      // A repeated Escape can close the dialog without a cancel event. Reopen it during a
+      // save so the form and its pending result survive; otherwise treat it as Cancel.
+      onclose: () => {
+        if (closing) return;
+        if (saving) backdrop.showModal();
+        else close(null);
+      },
+      onmousedown: (e) => (pressedOutside = outside(e)),
+      onclick: (e) => pressedOutside && outside(e) && close(null) }, form);
     document.body.append(backdrop);
     backdrop.showModal();
     refreshDynamic();
@@ -825,7 +842,7 @@ function settingsPage() {
     const f = ev.target.files[0];
     if (!f) return;
     const reader = new FileReader();
-    reader.onload = () => act(() => api('POST', '/api/logo', { dataUrl: reader.result }), 'Logo updated');
+    reader.onload = () => act(async () => { await api('POST', '/api/logo', { dataUrl: reader.result }); logoVersion++; }, 'Logo updated');
     reader.readAsDataURL(f);
   } });
 
@@ -834,7 +851,7 @@ function settingsPage() {
     form,
     h('div', { class: 'card', style: 'max-width:640px' },
       h('h2', null, 'Logo'),
-      s.logoFile ? h('img', { src: `/logo?v=${Date.now()}`, style: 'max-width:180px;max-height:140px;display:block;margin-bottom:12px' }) : h('p', { class: 'muted' }, 'No logo.'),
+      s.logoFile ? h('img', { src: `/logo?v=${logoVersion}`, style: 'max-width:180px;max-height:140px;display:block;margin-bottom:12px' }) : h('p', { class: 'muted' }, 'No logo.'),
       h('div', { class: 'actions' }, fileInput,
         h('button', { onclick: () => fileInput.click() }, s.logoFile ? 'Replace logo…' : 'Upload logo…'),
         s.logoFile && h('button', { class: 'danger', onclick: () => confirm('Remove the logo?') && act(() => api('POST', '/api/logo', { dataUrl: null }), 'Logo removed') }, 'Remove'))),
@@ -848,12 +865,17 @@ function settingsPage() {
 
 // ---------- router ----------
 
+let logoVersion = Date.now(); // bumped after each upload so the replaced file is fetched
+
 async function refresh() {
   S = await api('GET', '/api/state');
+  // Only touch the mark when the logo changes, so navigation and saves don't re-download it.
   const mark = document.querySelector('.brand-mark');
-  if (S.settings.logoFile) {
-    mark.replaceChildren(h('img', { src: '/logo', alt: '', onerror: () => { mark.textContent = 'CW'; } }));
-  } else mark.textContent = 'CW';
+  const key = S.settings.logoFile ? `${S.settings.logoFile}:${logoVersion}` : '';
+  if (mark.dataset.logo === key) return;
+  mark.dataset.logo = key;
+  if (key) mark.replaceChildren(h('img', { src: `/logo?v=${logoVersion}`, alt: '', onerror: () => { mark.textContent = 'CW'; } }));
+  else mark.textContent = 'CW';
 }
 
 const routes = [
