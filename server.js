@@ -148,7 +148,8 @@ function collectEntries(db, clientId, sources, { forPreview = false } = {}) {
   const entries = {};
   for (const t of ENTRY_TYPES) {
     entries[t] = [];
-    for (const entryId of sources?.[t] || []) {
+    // De-duplicate so an entry listed twice is billed once (it isn't marked invoiced until after this check).
+    for (const entryId of new Set(sources?.[t] || [])) {
       const e = db[t].find((x) => x.id === entryId);
       if (forPreview) {
         if (e && e.clientId === clientId) entries[t].push(e);
@@ -370,6 +371,9 @@ async function handleApi(req, res, url) {
   const parts = url.pathname.split('/').slice(2); // after /api/
   const [first, id, action] = parts;
   const method = req.method;
+  // Read the whole body before loading any data. Everything from loadAll() to save() below
+  // then runs without an await, so overlapping requests can't save stale copies over each other.
+  const body = method === 'GET' ? null : await readJson(req);
 
   if (method === 'GET' && first === 'state') {
     const db = loadAll();
@@ -377,37 +381,39 @@ async function handleApi(req, res, url) {
   }
   if (first === 'settings' && method === 'PUT') {
     const db = loadAll();
-    const settings = clean('settings', await readJson(req), db.settings, db);
+    const settings = clean('settings', body, db.settings, db);
     if (settings.startingInvoiceNumber < 1) throw new HttpError(400, 'Starting invoice number must be positive');
     save('settings', settings);
     return send(res, 200, settings);
   }
   if (first === 'logo' && method === 'POST') {
-    const { dataUrl } = await readJson(req);
-    const db = loadAll();
-    if (db.settings.logoFile) fs.rmSync(path.join(DATA, db.settings.logoFile), { force: true });
+    const { dataUrl } = body;
+    // Validate and write the new file before touching the old one, so a rejected upload
+    // leaves the current logo in place.
+    let newFile = null;
     if (dataUrl) {
       const m = /^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,(.+)$/.exec(dataUrl);
       if (!m) throw new HttpError(400, 'Logo must be a PNG, JPG, GIF, WebP or SVG image');
       const ext = m[1] === 'svg+xml' ? 'svg' : m[1].replace('jpeg', 'jpg');
-      db.settings.logoFile = `logo.${ext}`;
-      fs.writeFileSync(path.join(DATA, db.settings.logoFile), Buffer.from(m[2], 'base64'));
-    } else {
-      db.settings.logoFile = null;
+      newFile = `logo.${ext}`;
+      fs.writeFileSync(path.join(DATA, newFile), Buffer.from(m[2], 'base64'));
     }
+    const db = loadAll();
+    const oldFile = db.settings.logoFile;
+    db.settings.logoFile = newFile;
     save('settings', db.settings);
+    if (oldFile && oldFile !== newFile) fs.rmSync(path.join(DATA, oldFile), { force: true });
     return send(res, 200, db.settings);
   }
 
   if (first === 'invoices') {
     if (method === 'POST' && id === 'preview') {
       const db = loadAll();
-      const body = await readJson(req);
       const draft = buildInvoice(db, body, collectEntries(db, body.clientId, body.sources, { forPreview: true }));
       return send(res, 200, renderInvoice(draft, db.settings), 'text/html; charset=utf-8');
     }
-    if (method === 'POST' && !id) return send(res, 201, createInvoice(await readJson(req)));
-    if (method === 'PUT' && id) return send(res, 200, updateInvoice(id, await readJson(req)));
+    if (method === 'POST' && !id) return send(res, 201, createInvoice(body));
+    if (method === 'PUT' && id) return send(res, 200, updateInvoice(id, body));
     if (method === 'DELETE' && id) {
       deleteInvoice(id);
       return send(res, 200, { ok: true });
@@ -428,7 +434,6 @@ async function handleApi(req, res, url) {
   if (['clients', 'projects', ...ENTRY_TYPES].includes(first)) {
     const db = loadAll();
     const list = db[first];
-    const body = method === 'GET' ? null : await readJson(req);
 
     if (method === 'POST' && !id) {
       const now = new Date().toISOString();
