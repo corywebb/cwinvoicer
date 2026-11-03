@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { once } = require('node:events');
+const http = require('node:http');
 
 test('invoice lifecycle in an isolated data folder', { timeout: 20000 }, async (t) => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cwinvoicer-test-'));
@@ -69,5 +70,54 @@ test('invoice lifecycle in an isolated data folder', { timeout: 20000 }, async (
     assert.equal(state.time[0].invoiceId, null);
     assert.equal(state.time[0].billedRate, undefined);
     assert.equal(state.nextInvoiceNumber, 1242);
+  });
+  await t.test('listing an entry twice bills it once', async () => {
+    const c = await request('POST', 'clients', { name: 'Duplicate check', rate: 100 }, 201);
+    const e = await request('POST', 'time', { clientId: c.id, date: '2026-01-02', description: 'Once', hours: 1 }, 201);
+    const preview = await fetch(`${base}/api/invoices/preview`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CWInvoicer': '1' },
+      body: JSON.stringify({ clientId: c.id, sources: { time: [e.id, e.id] } }),
+    }).then((r) => r.text());
+    assert.equal(preview.split('Once').length - 1, 1, 'preview lists the entry once');
+    const inv = await request('POST', 'invoices', { clientId: c.id, sources: { time: [e.id, e.id] } }, 201);
+    assert.equal(inv.total, 100);
+    assert.deepEqual(inv.sources.time, [e.id]);
+    await request('DELETE', `invoices/${inv.id}`);
+  });
+  await t.test('overlapping saves both persist', async () => {
+    // Open two requests, send headers only, then finish their bodies: each handler is
+    // waiting on its body at the same time, as with two quick saves from the app.
+    const start = (body) => {
+      const payload = JSON.stringify(body);
+      const req = http.request(`${base}/api/time`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CWInvoicer': '1', 'Content-Length': Buffer.byteLength(payload) },
+      });
+      req.flushHeaders();
+      const done = once(req, 'response').then(([res]) => { res.resume(); return res.statusCode; });
+      return { finish: () => req.end(payload), done };
+    };
+    const a = start({ clientId: client.id, date: '2026-02-01', description: 'Overlap A', hours: 1 });
+    const b = start({ clientId: client.id, date: '2026-02-01', description: 'Overlap B', hours: 1 });
+    await new Promise((r) => setTimeout(r, 100));
+    a.finish();
+    b.finish();
+    assert.deepEqual(await Promise.all([a.done, b.done]), [201, 201]);
+    const { time } = await request('GET', 'state');
+    assert.ok(time.some((e) => e.description === 'Overlap A'), 'A was saved');
+    assert.ok(time.some((e) => e.description === 'Overlap B'), 'B was saved');
+  });
+  await t.test('a rejected logo upload keeps the current logo', async () => {
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=';
+    await request('POST', 'logo', { dataUrl: png });
+    await request('POST', 'logo', { dataUrl: 'data:image/bmp;base64,Qk0=' }, 400);
+    assert.equal((await request('GET', 'state')).settings.logoFile, 'logo.png');
+    assert.equal((await fetch(`${base}/logo`)).status, 200);
+    // Switching formats removes the old file; removing the logo removes the file.
+    await request('POST', 'logo', { dataUrl: png.replace('image/png', 'image/gif') });
+    assert.equal(fs.existsSync(path.join(dataDir, 'logo.png')), false);
+    assert.equal(fs.existsSync(path.join(dataDir, 'logo.gif')), true);
+    await request('POST', 'logo', { dataUrl: null });
+    assert.equal(fs.existsSync(path.join(dataDir, 'logo.gif')), false);
   });
 });
