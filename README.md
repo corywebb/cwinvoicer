@@ -156,3 +156,7 @@ npm test
 Tests use Node's built-in runner and temporary data folders. They cover rate precedence,
 line grouping, HTML escaping, rebilling protection and invoice state transitions.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the browser checklist and fork-to-PR workflow.
+
+## Contributors
+
+- [Mike Hamanaka](https://github.com/hamanakam1)
