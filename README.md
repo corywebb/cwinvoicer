@@ -13,7 +13,11 @@ Local invoicing by Cory Webb Media. No accounts, no cloud service.</p>
   <a href="CONTRIBUTING.md">Contribute</a>
 </p>
 
-![CW Invoicer dashboard showing fictional client work and invoice balances](docs/images/dashboard.png)
+![Animated walkthrough of CW Invoicer: review work, build an invoice, and export a filtered ledger](docs/images/walkthrough.gif)
+
+*A 24-second loop of real app captures with fictional demo data.*
+[Static screenshots and walkthrough transcript](docs/visual-guide.md#animated-walkthrough) ·
+[How the system works](docs/system.md)
 
 Track time, line items and expenses. Turn unbilled work into clear invoices, export PDFs,
 and keep the records in a folder you control. The desktop app runs its local server and
@@ -25,6 +29,7 @@ Chromium renderer inside Electron; the server uses only Node built-ins, and the 
 | **Track** | Flexible time input, quantity × rate items and expenses |
 | **Invoice** | Summary or detailed lines, editable descriptions and live preview |
 | **Finish** | PDF export, printing, due dates and paid/unpaid status |
+| **Review** | Invoice-date and client filters, paid/outstanding totals and CSV export |
 | **Keep** | Plain JSON files, a chosen data folder and generated PDFs |
 
 ## Try the demo
@@ -97,6 +102,29 @@ Use `npm run demo` when you want seeded examples and automatic cleanup.
 5. On the invoice page you can **Open/Download PDF** (saved to the data folder's `pdfs/`),
    Print, Edit details, or Mark paid.
 
+## Review and export your invoices
+
+Open **Invoices** to filter by client, status, and invoice date. The totals show the
+selected invoices' billed, paid, outstanding, and overdue amounts. **Export CSV**
+downloads that selection for a spreadsheet or bookkeeper, including billed client
+names, dates, totals, payment status, terms, and notes.
+
+Date filters include both endpoints and use **invoice dates**, not payment dates.
+The export is an invoice ledger; it is not a cash-receipts report or a full backup.
+[Export columns, examples and data handling](docs/system.md#invoice-ledger-and-csv-export).
+
+## How the pieces fit together
+
+The Mac app starts a private Node server and opens the workspace in Electron.
+The browser interface sends requests to that server, which validates records and
+stores them as JSON. Invoice calculations and ledger filtering are shared between
+the browser and server so the preview, stored totals, and export follow the same rules.
+
+Creating an invoice links its source work and saves the billed rates and lines.
+Marking it paid records a date; deleting it makes its work available for billing
+again. PDF generation stays on your machine, using Electron or a local Chrome-family
+browser. [Follow an invoice through the system](docs/system.md#follow-one-invoice).
+
 ## Invoice numbers
 
 Numbers start at the **Starting invoice number** in Settings (1242 by default). After that, each invoice gets
@@ -117,7 +145,7 @@ Everything is plain JSON in the data folder (by default `~/Library/Application S
 The desktop configuration is `~/Library/Application Support/CW Invoicer/config.json`; its
 `dataDir` setting selects a custom folder. `CWINVOICER_DATA` overrides that setting.
 
-Back up the data folder to back up everything. To move it (for example to iCloud Drive), use **File → Choose Data Folder…**
+Quit the app, then copy the entire data folder to back up everything. To move it (for example to iCloud Drive), use **File → Choose Data Folder…**
 in the app. The current location is shown on the Settings page.
 
 
@@ -130,6 +158,7 @@ cwinvoicer/
 |-- public/
 |   |-- app.js             Workspace, forms and invoice builder
 |   |-- lines.js           Shared invoice calculations
+|   |-- ledger.js          Shared ledger filters, totals and CSV
 |   |-- styles.css         Responsive workspace styles
 |   `-- index.html         App shell
 |-- lib/invoice-template.js  Printable invoice HTML
@@ -154,7 +183,8 @@ npm test
 ```
 
 Tests use Node's built-in runner and temporary data folders. They cover rate precedence,
-line grouping, HTML escaping, rebilling protection and invoice state transitions.
+line grouping, HTML escaping, rebilling protection, invoice state transitions, print
+error handling, date filters and spreadsheet-safe CSV exports.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the browser checklist and fork-to-PR workflow.
 
 ## Contributors
