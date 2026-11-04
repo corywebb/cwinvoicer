@@ -26,11 +26,11 @@ npm run build && node --test test/ledger.test.js
 npm run build && node --test --test-name-pattern='CSV' test/ledger.test.js
 ```
 
-CI runs `npm run typecheck` and `npm test` on Node 22 and 24. It does not build the desktop app.
+CI runs `npm run typecheck` and `npm test` on Node 22 and 24. It does not build the desktop app. A Stop hook (`.claude/hooks/check-on-stop.js`) runs the same two checks when a turn ends with new uncommitted changes in `src/`, `test/` or `scripts/`.
 
 ## Real data
 
-`npm start` and `npm run app` use the real business data folder (`~/Library/Application Support/CW Invoicer/`, or the `dataDir` in its `config.json`). For manual testing, use `npm run demo` or set `CWINVOICER_DATA="$(mktemp -d)"`.
+`npm start` and `npm run app` use the real business data folder (`~/Library/Application Support/CW Invoicer/`, or the `dataDir` in its `config.json`). For manual testing, use `npm run demo` or set `CWINVOICER_DATA="$(mktemp -d)"`. A hook (`.claude/hooks/guard-real-data.js`) blocks Bash commands that would run against the real data or touch that folder; if one is blocked, don't work around it.
 
 Run only one app process per data folder. Nothing locks the data folder (Electron's single-instance lock doesn't cover browser mode), and a multi-collection write is not one atomic transaction.
 
