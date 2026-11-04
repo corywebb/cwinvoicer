@@ -92,7 +92,7 @@ function deny(reason) {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
-      permissionDecisionReason: `${reason} project-reviewer may run only read-only git commands (${[...READ_ONLY].join(', ')}), without pipes or redirects. Use Read and Grep for everything else.`,
+      permissionDecisionReason: `${reason} project-reviewer may run only read-only git commands (${[...READ_ONLY].join(', ')}), without pipes or redirects. Use Read for everything else, and \`git grep\` or \`git ls-files\` to search.`,
     },
   }));
 }
