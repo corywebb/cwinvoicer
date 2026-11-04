@@ -1,6 +1,7 @@
 ---
 name: ui-check
 description: Run the CONTRIBUTING.md browser checklist against a disposable demo workspace and report what passed, failed or couldn't be checked. Use after changing src/client/, public/ or src/server/invoice-template.ts, or when asked to check the UI in a browser.
+context: fork
 ---
 
 # UI check
