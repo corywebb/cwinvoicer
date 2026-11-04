@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const printInvoice = require('../electron/print-invoice');
+const { printInvoice } = require('../out/electron/print-invoice');
 
 function fixture({ loadError, printError } = {}) {
   const errors = [];

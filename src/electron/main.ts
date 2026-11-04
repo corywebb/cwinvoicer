@@ -1,35 +1,43 @@
 // CW Invoicer desktop app: runs the local server in-process and shows it in a native window.
-const { app, BrowserWindow, Menu, shell, dialog } = require('electron');
-const path = require('path');
-const fs = require('fs');
-const printInvoicePage = require('./print-invoice');
-const loadHidden = require('./hidden-window');
+import { BrowserWindow, Menu, type MenuItemConstructorOptions, type Rectangle, app, dialog, shell } from 'electron';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { errorMessage } from '../shared/errors';
+import type { EntryType } from '../shared/types';
+import * as server from '../server';
+import { loadHidden } from './hidden-window';
+import { printInvoice as printInvoicePage } from './print-invoice';
 
-// Same support folder in development and in the packaged app.
+// Same support folder in development and in the packaged app. The server doesn't read it
+// until start(), so setting it here, after the imports load, is early enough.
 app.setPath('userData', path.join(app.getPath('appData'), 'CW Invoicer'));
 
-const server = require('../server');
+interface AppConfig {
+  /** A data folder chosen with File → Choose Data Folder…. */
+  dataDir?: string;
+  windowBounds?: Rectangle;
+}
 
 const CONFIG = path.join(app.getPath('userData'), 'config.json');
-const readConfig = () => {
+const readConfig = (): AppConfig => {
   try {
     return JSON.parse(fs.readFileSync(CONFIG, 'utf8'));
   } catch {
     return {};
   }
 };
-const writeConfig = (patch) => {
+const writeConfig = (patch: AppConfig) => {
   fs.mkdirSync(path.dirname(CONFIG), { recursive: true });
   fs.writeFileSync(CONFIG, JSON.stringify({ ...readConfig(), ...patch }, null, 2) + '\n');
 };
 const dataDir = () => process.env.CWINVOICER_DATA || readConfig().dataDir || path.join(app.getPath('userData'), 'data');
 
-let baseUrl = null;
-let win = null;
+let baseUrl = '';
+let win: BrowserWindow | null = null;
 
 // ---------- PDF + printing (Electron's own Chromium, no Google Chrome needed) ----------
 
-async function renderPdf(url, outPath) {
+async function renderPdf(url: string, outPath: string): Promise<void> {
   const w = await loadHidden(BrowserWindow, url);
   try {
     const pdf = await w.webContents.printToPDF({ printBackground: true, preferCSSPageSize: true });
@@ -39,48 +47,48 @@ async function renderPdf(url, outPath) {
   }
 }
 
-async function printInvoice(id) {
+async function printInvoice(id: string): Promise<void> {
   await printInvoicePage(`${baseUrl}/invoice/${id}`, { BrowserWindow, dialog });
 }
 
-async function openPdf(id) {
+async function openPdf(id: string): Promise<void> {
   try {
     const file = await server.pdfFor(id);
     const err = await shell.openPath(file);
     if (err) throw new Error(err);
   } catch (e) {
-    dialog.showErrorBox('Could not open PDF', e.message);
+    dialog.showErrorBox('Could not open PDF', errorMessage(e));
   }
 }
 
 // ---------- window ----------
 
 /** Runs code in the page once the app (and its state) has loaded. The page exposes `CWInvoicer` for this. */
-function inPage(code) {
-  showWindow();
+function inPage(code: string): void {
+  const w = showWindow();
   const run = () =>
-    win.webContents.executeJavaScript(`(async () => { while (!window.CWInvoicer?.loaded) await new Promise((r) => setTimeout(r, 50)); ${code} })()`);
-  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', run);
+    w.webContents.executeJavaScript(`(async () => { while (!window.CWInvoicer?.loaded) await new Promise((r) => setTimeout(r, 50)); ${code} })()`);
+  if (w.webContents.isLoading()) w.webContents.once('did-finish-load', run);
   else run();
 }
-const go = (hash) => inPage(`location.hash = ${JSON.stringify(hash)};`);
-const addEntry = (type) => inPage(`if (await CWInvoicer.editEntry(${JSON.stringify(type)})) CWInvoicer.render();`);
+const go = (hash: string) => inPage(`location.hash = ${JSON.stringify(hash)};`);
+const addEntry = (type: EntryType) => inPage(`if (await CWInvoicer.editEntry(${JSON.stringify(type)})) CWInvoicer.render();`);
 
-function handleLink(url) {
+function handleLink(url: string): void {
   const u = new URL(url);
   if (u.origin !== baseUrl) {
     shell.openExternal(url);
     return;
   }
   let m;
-  if ((m = /^\/api\/invoices\/([\w-]+)\/pdf$/.exec(u.pathname)) && u.searchParams.get('download') !== '1') return openPdf(m[1]);
-  if ((m = /^\/invoice\/([\w-]+)$/.exec(u.pathname)) && u.searchParams.has('print')) return printInvoice(m[1]);
+  if ((m = /^\/api\/invoices\/([\w-]+)\/pdf$/.exec(u.pathname)) && u.searchParams.get('download') !== '1') return void openPdf(m[1]);
+  if ((m = /^\/invoice\/([\w-]+)$/.exec(u.pathname)) && u.searchParams.has('print')) return void printInvoice(m[1]);
   shell.openExternal(url);
 }
 
-function createWindow() {
+function createWindow(): BrowserWindow {
   const bounds = readConfig().windowBounds || { width: 1360, height: 900 };
-  win = new BrowserWindow({
+  const w = new BrowserWindow({
     ...bounds,
     minWidth: 900,
     minHeight: 600,
@@ -91,47 +99,51 @@ function createWindow() {
     show: false,
     webPreferences: { sandbox: true },
   });
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  w.webContents.setWindowOpenHandler(({ url }) => {
     handleLink(url);
     return { action: 'deny' };
   });
-  win.webContents.on('will-navigate', (ev, url) => {
+  w.webContents.on('will-navigate', (ev, url) => {
     if (new URL(url).origin === baseUrl) return;
     ev.preventDefault();
     shell.openExternal(url);
   });
-  win.once('ready-to-show', () => win.show());
-  win.on('close', () => writeConfig({ windowBounds: win.getBounds() }));
-  win.on('closed', () => (win = null));
-  win.loadURL(`${baseUrl}/`);
+  w.once('ready-to-show', () => w.show());
+  w.on('close', () => writeConfig({ windowBounds: w.getBounds() }));
+  w.on('closed', () => (win = null));
+  w.loadURL(`${baseUrl}/`);
+  return (win = w);
 }
 
-function showWindow() {
-  if (!win) createWindow();
-  else win.show();
+function showWindow(): BrowserWindow {
+  if (!win) return createWindow();
+  win.show();
+  return win;
 }
 
 // ---------- data folder ----------
 
-async function chooseDataFolder() {
+async function chooseDataFolder(): Promise<void> {
   const current = dataDir();
-  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+  const options = {
     title: 'Choose Data Folder',
     message: 'Choose where CW Invoicer keeps its data (JSON files, logo and PDFs).',
-    properties: ['openDirectory', 'createDirectory'],
+    properties: ['openDirectory', 'createDirectory'] as ('openDirectory' | 'createDirectory')[],
     defaultPath: current,
-  });
+  };
+  const { canceled, filePaths } = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
   if (canceled || !filePaths[0] || path.resolve(filePaths[0]) === path.resolve(current)) return;
   const target = filePaths[0];
   if (!fs.existsSync(path.join(target, 'settings.json'))) {
-    const { response } = await dialog.showMessageBox(win, {
-      type: 'question',
+    const question = {
+      type: 'question' as const,
       message: 'This folder has no CW Invoicer data. Copy your current data into it?',
       detail: `Current data folder:\n${current}`,
       buttons: ['Copy Data', 'Start Empty', 'Cancel'],
       defaultId: 0,
       cancelId: 2,
-    });
+    };
+    const { response } = win ? await dialog.showMessageBox(win, question) : await dialog.showMessageBox(question);
     if (response === 2) return;
     if (response === 0) fs.cpSync(current, target, { recursive: true });
   }
@@ -142,15 +154,15 @@ async function chooseDataFolder() {
 
 // ---------- menu ----------
 
-function buildMenu() {
-  const nav = [
+function buildMenu(): void {
+  const nav: MenuItemConstructorOptions[] = ([
     ['Dashboard', '#/', 'CmdOrCtrl+1'],
     ['Time', '#/time', 'CmdOrCtrl+2'],
     ['Line Items', '#/items', 'CmdOrCtrl+3'],
     ['Expenses', '#/expenses', 'CmdOrCtrl+4'],
     ['Invoices', '#/invoices', 'CmdOrCtrl+5'],
     ['Clients & Projects', '#/clients', 'CmdOrCtrl+6'],
-  ].map(([label, hash, accelerator]) => ({ label, accelerator, click: () => go(hash) }));
+  ] as const).map(([label, hash, accelerator]) => ({ label, accelerator, click: () => go(hash) }));
 
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     {
@@ -220,7 +232,7 @@ if (!app.requestSingleInstanceLock()) {
       });
       baseUrl = `http://127.0.0.1:${port}`;
     } catch (e) {
-      dialog.showErrorBox('CW Invoicer could not start', e.stack || e.message);
+      dialog.showErrorBox('CW Invoicer could not start', (e as Error).stack || errorMessage(e));
       app.exit(1);
       return;
     }

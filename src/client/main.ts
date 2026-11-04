@@ -60,7 +60,7 @@ async function renderPage(): Promise<void> {
 }
 setRenderer(renderPage);
 
-// Called by electron/main.js (menu items like File → Log Time…) once `loaded` is true.
+// Called by src/electron/main.ts (menu items like File → Log Time…) once `loaded` is true.
 declare global {
   interface Window {
     CWInvoicer: { readonly loaded: boolean; editEntry: typeof editEntry; render: typeof render };

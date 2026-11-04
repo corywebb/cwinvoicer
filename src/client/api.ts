@@ -16,7 +16,7 @@ export async function api<T = unknown>(method: string, url: string, body?: unkno
   return data as T;
 }
 
-export const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+export { errorMessage } from '../shared/errors';
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 export function toast(msg: string, isError = false): void {

@@ -16,7 +16,7 @@ calculations, and JSON records; the main difference is who opens the window and 
    client and have not already been billed. It assigns a number, stores invoice
    lines and the bill-to details, and links the source entries to the invoice.
    Billed time also records the hourly rate used.
-4. **Deliver a PDF.** The [invoice template](../lib/invoice-template.js) renders a
+4. **Deliver a PDF.** The [invoice template](../src/server/invoice-template.ts) renders a
    Letter-size document. Electron renders PDFs itself; browser mode invokes an
    installed Chrome-family browser. PDFs are saved in `pdfs/` inside the data folder.
 5. **Record payment.** Mark paid stores a payment date. Mark unpaid clears it.
@@ -86,14 +86,20 @@ the interface disables export when there are no matching rows.
 
 | Component | Responsibility |
 | --- | --- |
-| [electron/main.js](../electron/main.js) | Starts the local server, opens the native window, menus and PDF integration |
-| [electron/print-invoice.js](../electron/print-invoice.js) | Native print lifecycle, cancellation, errors and temporary-window cleanup |
-| [server.js](../server.js) | HTTP routes, record validation, invoice lifecycle and JSON persistence |
+| [src/electron/main.ts](../src/electron/main.ts) | Starts the local server, opens the native window, menus and PDF integration |
+| [src/electron/print-invoice.ts](../src/electron/print-invoice.ts) | Native print lifecycle, cancellation, errors and temporary-window cleanup |
+| [src/server/index.ts](../src/server/index.ts) | HTTP server, host check, static files and `start()` |
+| [src/server/api.ts](../src/server/api.ts) | API routes |
+| [src/server/validate.ts](../src/server/validate.ts) | Record schemas and request validation |
+| [src/server/invoices.ts](../src/server/invoices.ts) | Invoice creation, edits, payment status and deletion |
+| [src/server/log.ts](../src/server/log.ts) | Invoice activity log |
+| [src/server/pdf.ts](../src/server/pdf.ts) | Saved PDFs: freshness checks and rendering |
+| [src/server/storage.ts](../src/server/storage.ts) | JSON persistence |
 | [src/client/](../src/client) | Navigation, forms, builder, invoice ledger and CSV download (bundled to `public/app.js`) |
 | [src/shared/lines.ts](../src/shared/lines.ts) | Shared invoice line calculations |
 | [src/shared/ledger.ts](../src/shared/ledger.ts) | Shared ledger selection, totals, status and CSV serialization |
 | [src/shared/types.ts](../src/shared/types.ts) | Types for every stored record and the app state |
-| [lib/invoice-template.js](../lib/invoice-template.js) | Printable invoice HTML |
+| [src/server/invoice-template.ts](../src/server/invoice-template.ts) | Printable invoice HTML |
 | [scripts/demo.js](../scripts/demo.js) | Fictional workspace in a disposable temporary directory |
 
 See the [visual architecture and lifecycle guide](visual-guide.md) for the diagrams.

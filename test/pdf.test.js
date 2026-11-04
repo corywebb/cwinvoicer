@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const server = require('../server');
+const server = require('../out/server');
 
 // The server runs in-process with a fake renderer, so each test controls whether a render
 // succeeds, fails or is slow, and can count how many renders happened.

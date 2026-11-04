@@ -1,7 +1,9 @@
 {
+  // The browser app. Server and desktop code: tsconfig.node.json.
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["DOM", "DOM.Iterable", "ES2023"],
+    "types": [],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "strict": true,
@@ -11,5 +13,5 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true
   },
-  "include": ["src"]
+  "include": ["src/client", "src/shared"]
 }
