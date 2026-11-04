@@ -4,23 +4,25 @@ CW Invoicer is a small, local macOS invoicing app. Keep contributions focused an
 
 ## Work in a disposable workspace
 
-Use Node.js 22 or 24 for the test workflow. The app declares Node.js 18+ support.
+The app requires Node.js 22 or newer. CI tests Node.js 22 and 24.
 
 ```sh
 git clone https://github.com/YOUR-USERNAME/cwinvoicer.git
 cd cwinvoicer
 git remote add upstream https://github.com/corywebb/cwinvoicer.git
 git switch -c your-change
+npm ci
 npm test
 npm run demo
 ```
 
-Tests and the demo use Node's built-in modules, so neither needs `npm install`.
+`npm test` and `npm run demo` build first, so both need the TypeScript build tools from `npm ci`.
+Neither uses Electron; `ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci` skips its download, as CI does.
 The demo prints its local URL and creates fictional clients and work in a new temporary directory.
 Stopping it with Ctrl+C discards the demo data. It never reads the desktop app's configuration.
 An abrupt termination such as `kill -9` can leave the temporary directory behind.
 
-For Electron development, run `npm ci`, then `npm run app` on macOS. **Normal desktop and
+For Electron development, run `npm run app` on macOS after a full `npm ci`. **Normal desktop and
 browser modes share your configured business data.** Set `CWINVOICER_DATA` to a separate
 folder when testing changes against either mode. Use only one app process per data folder.
 

@@ -79,6 +79,8 @@ GitHub displays HTML as source. Download the HTML file and open it locally for t
 viewer, themes, source links and export controls. It is self-contained and is not loaded by the app.
 The diagram was generated with [Archify](https://github.com/tt-a1i/archify), with source references
 pinned to Cory's initial commit. It describes that source architecture, not a running deployment.
+Its file references, such as `server.js` and `electron/main.js`, predate the move to TypeScript;
+the [source map](system.md#runtime-and-source-map) lists the current paths.
 
 The server reads and replaces JSON collection files. Invoice creation updates several files;
 these writes are not a single database transaction. In desktop mode, Electron supplies a PDF

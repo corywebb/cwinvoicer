@@ -92,7 +92,7 @@ the interface disables export when there are no matching rows.
 | [src/server/api.ts](../src/server/api.ts) | API routes |
 | [src/server/validate.ts](../src/server/validate.ts) | Record schemas and request validation |
 | [src/server/invoices.ts](../src/server/invoices.ts) | Invoice creation, edits, payment status and deletion |
-| [src/server/log.ts](../src/server/log.ts) | Invoice activity log |
+| [src/server/log.ts](../src/server/log.ts) | Invoice activity log, stored in `invoice-log.json` so deleted invoices keep their history |
 | [src/server/pdf.ts](../src/server/pdf.ts) | Saved PDFs: freshness checks and rendering |
 | [src/server/storage.ts](../src/server/storage.ts) | JSON persistence |
 | [src/client/](../src/client) | Navigation, forms, builder, invoice ledger and CSV download (bundled to `public/app.js`) |
@@ -100,6 +100,7 @@ the interface disables export when there are no matching rows.
 | [src/shared/ledger.ts](../src/shared/ledger.ts) | Shared ledger selection, totals, status and CSV serialization |
 | [src/shared/types.ts](../src/shared/types.ts) | Types for every stored record and the app state |
 | [src/server/invoice-template.ts](../src/server/invoice-template.ts) | Printable invoice HTML |
+| [scripts/build.mjs](../scripts/build.mjs) | esbuild build of `src/` into `public/app.js` and `out/` |
 | [scripts/demo.js](../scripts/demo.js) | Fictional workspace in a disposable temporary directory |
 
 See the [visual architecture and lifecycle guide](visual-guide.md) for the diagrams.

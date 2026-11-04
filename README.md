@@ -21,7 +21,7 @@ Local invoicing by Cory Webb Media. No accounts, no cloud service.</p>
 
 Track time, line items and expenses. Turn unbilled work into clear invoices, export PDFs,
 and keep the records in a folder you control. The desktop app runs its local server and
-Chromium renderer inside Electron; the server uses only Node built-ins, and the browser UI is plain JavaScript.
+Chromium renderer inside Electron; the server uses only Node built-ins at runtime, and the browser UI is framework-free TypeScript bundled with esbuild.
 
 | From work to payment | What the app handles |
 | --- | --- |
@@ -39,11 +39,12 @@ With Node.js installed, clone the repository and start a disposable workspace:
 ```sh
 git clone https://github.com/corywebb/cwinvoicer.git
 cd cwinvoicer
+npm ci
 npm run demo
 ```
 
-Run `npm ci` first (it installs the TypeScript build tools), then open the local URL printed in the terminal.
-It creates **fictional clients and invoices in a fresh temporary folder**, separate from your
+`npm ci` installs the TypeScript build tools. Open the local URL printed in the terminal.
+The demo creates **fictional clients and invoices in a fresh temporary folder**, separate from your
 real data. Stop with Ctrl+C to discard it. The [visual tour](docs/visual-guide.md) shows what to expect.
 
 ## Build the Mac app
@@ -54,8 +55,9 @@ npm run app      # run Electron without packaging
 npm run dist     # create the .app and .dmg in dist/
 ```
 
-Output names depend on your architecture; an Apple Silicon build produces
-`dist/mac-arm64/CW Invoicer.app` and `dist/CW Invoicer-1.0.0-arm64.dmg`.
+Output names depend on your architecture and the version in `package.json`. For version 1.2.0,
+an Apple Silicon build produces `dist/mac-arm64/CW Invoicer.app` and `dist/CW Invoicer-1.2.0-arm64.dmg`;
+an Intel build produces `dist/mac/CW Invoicer.app` and `dist/CW Invoicer-1.2.0.dmg`.
 Drag the app into Applications. The build is unsigned; on first launch, right-click and choose **Open**.
 
 The server uses a private local port. No Terminal or separate Chrome installation is needed
@@ -95,12 +97,12 @@ Use `npm run demo` when you want seeded examples and automatic cleanup.
    - **Summary** format: one time line per project and hourly rate (hours × rate). A project's line items and expenses are combined into one
      additional line, labeled as items, expenses, or both. Time with no project is grouped by rate; items and expenses with no project are listed on their own.
    - **Detailed** format: every time entry, line item and expense with its date and own description, grouped under a
-     bold heading for each project (oldest first). Entries with no project come last, under "Other".
+     bold heading for each project (oldest first). Entries with no project come last, under "Other" if the invoice also has project groups.
    You can switch the format on an existing invoice too. The default is set in Settings.
 4. When you create the invoice it gets the next number, and the selected entries are marked invoiced so they won't show
    up again. Deleting an invoice marks its entries as unbilled again.
-5. On the invoice page you can **Open/Download PDF** (saved to the data folder's `pdfs/`),
-   Print, Edit details, or Mark paid.
+5. On the invoice page you can **Open/Download PDF** (saved to the data folder's `pdfs/`), Show in Finder,
+   Print, Mark paid, Edit, or Delete. Its activity is listed there; **Invoices → Activity log** shows every invoice's, including deleted ones.
 
 ## Review and export your invoices
 
@@ -140,6 +142,7 @@ Everything is plain JSON in the data folder (by default `~/Library/Application S
 | `clients.json`, `projects.json` | clients and projects |
 | `time.json`, `items.json`, `expenses.json` | work entries (`invoiceId` is set once billed) |
 | `invoices.json` | invoices, with a copy of each line as it was billed |
+| `invoice-log.json` | invoice activity, kept separately so deleted invoices keep their history |
 | `logo.*`, `pdfs/` | uploaded logo and generated PDFs |
 
 The desktop configuration is `~/Library/Application Support/CW Invoicer/config.json`; its
@@ -164,6 +167,7 @@ cwinvoicer/
 |   |-- styles.css         Responsive workspace styles
 |   `-- index.html         App shell
 |-- out/                   Built server, Electron and shared code (generated)
+|-- scripts/build.mjs      esbuild build for public/app.js and out/
 |-- scripts/demo.js        Disposable synthetic workspace
 |-- test/                  Node regression tests
 `-- docs/                  Screenshots and architecture source
