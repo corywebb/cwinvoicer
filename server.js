@@ -7,8 +7,8 @@ const path = require('path');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { renderInvoice } = require('./lib/invoice-template');
-const { buildLines, timeRate } = require('./public/lines');
-const ledger = require('./public/ledger');
+const { buildLines, timeRate } = require('./out/shared/lines');
+const ledger = require('./out/shared/ledger');
 
 const HOST = '127.0.0.1';
 const ROOT = __dirname;

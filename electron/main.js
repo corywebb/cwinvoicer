@@ -55,16 +55,16 @@ async function openPdf(id) {
 
 // ---------- window ----------
 
-/** Runs code in the page once the app (and its state) has loaded. */
+/** Runs code in the page once the app (and its state) has loaded. The page exposes `CWInvoicer` for this. */
 function inPage(code) {
   showWindow();
   const run = () =>
-    win.webContents.executeJavaScript(`(async () => { while (!S) await new Promise((r) => setTimeout(r, 50)); ${code} })()`);
+    win.webContents.executeJavaScript(`(async () => { while (!window.CWInvoicer?.loaded) await new Promise((r) => setTimeout(r, 50)); ${code} })()`);
   if (win.webContents.isLoading()) win.webContents.once('did-finish-load', run);
   else run();
 }
 const go = (hash) => inPage(`location.hash = ${JSON.stringify(hash)};`);
-const addEntry = (type) => inPage(`if (await editEntry(${JSON.stringify(type)})) render();`);
+const addEntry = (type) => inPage(`if (await CWInvoicer.editEntry(${JSON.stringify(type)})) CWInvoicer.render();`);
 
 function handleLink(url) {
   const u = new URL(url);

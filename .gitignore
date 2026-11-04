@@ -7,3 +7,8 @@ dist/
 data/
 output/
 .playwright-cli/
+
+# Build output (npm run build)
+out/
+public/app.js
+public/app.js.map

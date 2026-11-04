@@ -42,7 +42,7 @@ cd cwinvoicer
 npm run demo
 ```
 
-Open the local URL printed in the terminal. No dependency installation is needed for the demo.
+Run `npm ci` first (it installs the TypeScript build tools), then open the local URL printed in the terminal.
 It creates **fictional clients and invoices in a fresh temporary folder**, separate from your
 real data. Stop with Ctrl+C to discard it. The [visual tour](docs/visual-guide.md) shows what to expect.
 
@@ -155,12 +155,14 @@ in the app. The current location is shown on the Settings page.
 cwinvoicer/
 |-- electron/main.js       Mac window, menus, PDF and printing
 |-- server.js              Loopback HTTP API and JSON persistence
+|-- src/                   TypeScript, built by `npm run build`
+|   |-- shared/            Record types, invoice lines, ledger filters/totals/CSV
+|   `-- client/            Workspace UI: router, forms and one module per page
 |-- public/
-|   |-- app.js             Workspace, forms and invoice builder
-|   |-- lines.js           Shared invoice calculations
-|   |-- ledger.js          Shared ledger filters, totals and CSV
+|   |-- app.js             Built browser bundle (generated, not committed)
 |   |-- styles.css         Responsive workspace styles
 |   `-- index.html         App shell
+|-- out/shared/            Built shared modules for the server (generated)
 |-- lib/invoice-template.js  Printable invoice HTML
 |-- scripts/demo.js        Disposable synthetic workspace
 |-- test/                  Node regression tests
@@ -179,8 +181,12 @@ This is a single-user local app, not a hosted multi-user billing service.
 ## Development checks
 
 ```sh
-npm test
+npm run typecheck   # strict TypeScript check of src/
+npm test            # builds, then runs the Node tests
+npm run watch       # rebuilds src/ on every change while you work
 ```
+
+`npm start`, `npm run app`, `npm run demo` and `npm test` build first; `npm run dist` also type-checks.
 
 Tests use Node's built-in runner and temporary data folders. They cover rate precedence,
 line grouping, HTML escaping, rebilling protection, invoice state transitions, print

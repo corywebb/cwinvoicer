@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { buildLines, timeRate } = require('../public/lines');
+const { buildLines, timeRate } = require('../out/shared/lines');
 const { renderInvoice } = require('../lib/invoice-template');
 const db = {
   settings: { defaultRate: 100 }, clients: [{ id: 'c', rate: 120 }],

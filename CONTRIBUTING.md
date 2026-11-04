@@ -26,8 +26,8 @@ folder when testing changes against either mode. Use only one app process per da
 
 ## Keep the architecture small
 
-- Preserve the dependency-free Node server and plain JavaScript UI unless a change justifies more tooling.
-- Put shared line-building rules in `public/lines.js`; the server and browser both use it.
+- Preserve the dependency-free Node server. The UI is TypeScript in `src/client/`, bundled by esbuild with no framework.
+- Put shared rules in `src/shared/` (`lines.ts`, `ledger.ts`, record types in `types.ts`); the server and browser both use them.
 - Keep invoice HTML in `lib/invoice-template.js` so preview, print and PDF stay consistent.
 - Avoid changing existing invoice totals, saved schemas or numbering as a side effect of presentation work.
 - Use fictional data and `example.com` addresses in screenshots and fixtures.
@@ -35,8 +35,8 @@ folder when testing changes against either mode. Use only one app process per da
 ## Validate a change
 
 ```sh
-npm test
-node --check public/app.js
+npm run typecheck
+npm test            # builds first
 node --check server.js
 # macOS, after npm ci:
 npm run dist

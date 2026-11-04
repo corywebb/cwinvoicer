@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const ledger = require('../public/ledger');
+const ledger = require('../out/shared/ledger');
 const today = '2026-03-15';
 const invoices = [
   { number: 3, clientId: 'a', billTo: { name: 'Original name' }, date: '2026-03-01', dueDate: '2026-03-10', total: 10.10, status: 'unpaid' },
