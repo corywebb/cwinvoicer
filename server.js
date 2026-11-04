@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { renderInvoice } = require('./lib/invoice-template');
 const { buildLines, timeRate } = require('./public/lines');
+const ledger = require('./public/ledger');
 
 const HOST = '127.0.0.1';
 const ROOT = __dirname;
@@ -487,6 +488,20 @@ async function handleApi(req, res, url) {
   if (method === 'GET' && first === 'state') {
     const db = loadAll();
     return send(res, 200, { ...db, nextInvoiceNumber: nextInvoiceNumber(db), dataDir: DATA, pdfAvailable: !!(renderPdf || findChrome()) });
+  }
+  if (url.pathname === '/api/invoices/export.csv' && method === 'GET') {
+    const db = loadAll();
+    const asOf = today();
+    let invoices;
+    try {
+      invoices = ledger.select(db.invoices, Object.fromEntries(url.searchParams), asOf);
+    } catch (error) {
+      throw new HttpError(400, error.message);
+    }
+    return send(res, 200, ledger.csv(invoices, asOf), 'text/csv; charset=utf-8', {
+      'Content-Disposition': `attachment; filename="cwinvoicer-invoices-${asOf}.csv"`,
+      'X-Content-Type-Options': 'nosniff',
+    });
   }
   if (first === 'settings' && method === 'PUT') {
     const db = loadAll();

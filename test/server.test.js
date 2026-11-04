@@ -71,6 +71,23 @@ test('invoice lifecycle in an isolated data folder', { timeout: 20000 }, async (
     const unpaid = await request('PUT', `invoices/${invoice.id}`, { status: 'unpaid' });
     assert.equal(unpaid.paidDate, null);
   });
+  await t.test('CSV endpoint exports the selected snapshots without changing data', async () => {
+    const before = await request('GET', 'state');
+    const response = await fetch(`${base}/api/invoices/export.csv?client=${client.id}&status=unpaid`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /^text\/csv/);
+    assert.match(response.headers.get('content-disposition'), /^attachment; filename="cwinvoicer-invoices-/);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    const csv = await response.text();
+    assert.ok(csv.includes('"Example client"'));
+    assert.ok(csv.includes('"250.00","250.00"'));
+    assert.equal(csv.split('\r\n').length, 3);
+    const empty = await fetch(`${base}/api/invoices/export.csv?client=${other.id}`);
+    assert.equal((await empty.text()).split('\r\n').length, 2);
+    await request('GET', 'invoices/export.csv?from=2026-02-30', undefined, 400);
+    await request('GET', 'invoices/export.csv?from=2026-03-01&to=2026-02-01', undefined, 400);
+    assert.deepEqual(await request('GET', 'state'), before);
+  });
   await t.test('deleting an invoice releases its work for billing again', async () => {
     await request('DELETE', `invoices/${invoice.id}`);
     const state = await request('GET', 'state');

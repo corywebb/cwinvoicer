@@ -4,6 +4,48 @@ All app screenshots show fictional **Fieldwork Studio** data produced by `npm ru
 They are browser captures of the application, not mockups. Dates are relative to the day the
 demo starts. No business records are needed to reproduce the screens.
 
+## Animated walkthrough
+
+The README's [24-second animation](images/walkthrough.gif) is a sequence of real
+browser screenshots, not a continuous screen recording. Each scene holds for four
+seconds. The GIF is 1080 × 938 and approximately 736 KiB. Only captions and the progress strip are added; the application screens
+are unchanged. All records are fictional and were captured on November 3, 2026.
+
+For a motion-free version, use these original captures and the transcript:
+
+| Scene | What happens | Static capture |
+| --- | --- | --- |
+| 1 | Review unbilled work and outstanding invoices on the dashboard. | [Dashboard](walkthrough/01-dashboard.png) |
+| 2 | Review recorded time, its client/project, hours, and rates. | [Time](walkthrough/02-time.png) |
+| 3 | Start Northstar Coffee's invoice with its unbilled time and expense selected. | [Builder](walkthrough/03-builder.png) |
+| 4 | Create invoice #1045 for $897.50 and inspect its printable preview. | [Invoice](walkthrough/04-invoice.png) |
+| 5 | Review the resulting four-invoice ledger and totals. | [Ledger](walkthrough/05-ledger.png) |
+| 6 | Filter to October's unpaid invoices: two records totaling $2,500, then export CSV. | [Filtered ledger](walkthrough/06-export.png) |
+
+The final CSV download was checked separately against those two records; a screenshot
+of the export button alone is not proof of file contents. See [system details](system.md)
+for date semantics, export fields, rate precedence, and storage boundaries.
+
+### Rebuild the animation
+
+The six original 1440 × 1000 captures are checked in under `docs/walkthrough/`.
+The optional build script uses Pillow and its bundled font; it requires no network
+or image-generation service once Pillow is installed:
+
+```sh
+python3 -m venv /tmp/cwinvoicer-docs-venv
+/tmp/cwinvoicer-docs-venv/bin/pip install Pillow==12.2.0
+/tmp/cwinvoicer-docs-venv/bin/python scripts/build_walkthrough.py
+```
+
+To refresh the captures, start a fresh `npm run demo`, set the browser viewport to
+1440 × 1000, and follow the transcript in order. In the builder, create Northstar
+Coffee's invoice without changing its selections. For scene 6, choose a date range
+that includes the two original unpaid invoices but excludes the newly created one.
+The demo dates move with today's date, so update the transcript dates when recapturing.
+Capture after previews finish loading and transient messages disappear. Inspect every
+scene before rebuilding. Keep screenshots synthetic; never use a real business folder.
+
 ## Workspace
 
 ![Desktop dashboard with unbilled work, outstanding balances and recent invoices](images/dashboard.png)
