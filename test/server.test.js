@@ -10,7 +10,7 @@ const http = require('node:http');
 test('invoice lifecycle in an isolated data folder', { timeout: 20000 }, async (t) => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cwinvoicer-test-'));
   const child = spawn(process.execPath, ['-e',
-    "require('./server').start({ port: 0, dataDir: process.env.CWINVOICER_DATA }).then(port => process.send(port))"],
+    "require('./out/server').start({ port: 0, dataDir: process.env.CWINVOICER_DATA }).then(port => process.send(port))"],
   { cwd: path.resolve(__dirname, '..'), env: { ...process.env, CWINVOICER_DATA: dataDir }, stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
   t.after(async () => {
     if (child.exitCode === null && child.signalCode === null) {

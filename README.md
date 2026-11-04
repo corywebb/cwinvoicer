@@ -153,17 +153,17 @@ in the app. The current location is shown on the Settings page.
 
 ```text
 cwinvoicer/
-|-- electron/main.js       Mac window, menus, PDF and printing
-|-- server.js              Loopback HTTP API and JSON persistence
 |-- src/                   TypeScript, built by `npm run build`
 |   |-- shared/            Record types, invoice lines, ledger filters/totals/CSV
-|   `-- client/            Workspace UI: router, forms and one module per page
+|   |-- client/            Workspace UI: router, forms and one module per page
+|   |-- server/            Loopback HTTP API, validation, invoices, PDFs, JSON storage
+|   |                      and the printable invoice template
+|   `-- electron/          Mac window, menus, PDF and printing
 |-- public/
 |   |-- app.js             Built browser bundle (generated, not committed)
 |   |-- styles.css         Responsive workspace styles
 |   `-- index.html         App shell
-|-- out/shared/            Built shared modules for the server (generated)
-|-- lib/invoice-template.js  Printable invoice HTML
+|-- out/                   Built server, Electron and shared code (generated)
 |-- scripts/demo.js        Disposable synthetic workspace
 |-- test/                  Node regression tests
 `-- docs/                  Screenshots and architecture source

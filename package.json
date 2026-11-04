@@ -5,13 +5,13 @@
   "productName": "CW Invoicer",
   "description": "Local invoicing for Cory Webb Media. Data stored as JSON files.",
   "author": "Cory Webb Media",
-  "main": "electron/main.js",
+  "main": "out/electron/main.js",
   "scripts": {
     "build": "node scripts/build.mjs",
     "watch": "node scripts/build.mjs --watch",
-    "typecheck": "tsc",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "prestart": "npm run build",
-    "start": "node server.js --open",
+    "start": "node out/server/index.js --open",
     "preapp": "npm run build",
     "app": "electron .",
     "predist": "npm run typecheck && npm run build",
@@ -25,6 +25,7 @@
     "node": ">=18"
   },
   "devDependencies": {
+    "@types/node": "22.20.5",
     "electron": "45.2.1",
     "electron-builder": "26.18.0",
     "esbuild": "0.28.2",
@@ -38,12 +39,9 @@
       "buildResources": "build"
     },
     "files": [
-      "server.js",
-      "lib/**",
       "out/**",
       "public/**",
       "!public/app.js.map",
-      "electron/**",
       "package.json"
     ],
     "mac": {

@@ -26,18 +26,17 @@ folder when testing changes against either mode. Use only one app process per da
 
 ## Keep the architecture small
 
-- Preserve the dependency-free Node server. The UI is TypeScript in `src/client/`, bundled by esbuild with no framework.
+- Preserve the dependency-free Node server (`src/server/`). Everything is TypeScript: esbuild bundles the UI (`src/client/`, no framework) and compiles the server and Electron code file for file into `out/`.
 - Put shared rules in `src/shared/` (`lines.ts`, `ledger.ts`, record types in `types.ts`); the server and browser both use them.
-- Keep invoice HTML in `lib/invoice-template.js` so preview, print and PDF stay consistent.
+- Keep invoice HTML in `src/server/invoice-template.ts` so preview, print and PDF stay consistent.
 - Avoid changing existing invoice totals, saved schemas or numbering as a side effect of presentation work.
 - Use fictional data and `example.com` addresses in screenshots and fixtures.
 
 ## Validate a change
 
 ```sh
-npm run typecheck
+npm run typecheck   # browser and Node/Electron code
 npm test            # builds first
-node --check server.js
 # macOS, after npm ci:
 npm run dist
 ```

@@ -1,17 +1,18 @@
 // Renders an invoice as a standalone, print-ready HTML document (US Letter).
 // Used for the in-app preview, the browser print view, and headless-Chrome PDF export.
+import type { Invoice, InvoiceLine, Settings } from '../shared/types';
 
-const esc = (s) =>
-  String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const nl2br = (s) => esc(String(s ?? '').trim()).replace(/\r?\n/g, '<br>');
+const ENTITIES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ENTITIES[c]);
+const nl2br = (s: unknown) => esc(String(s ?? '').trim()).replace(/\r?\n/g, '<br>');
 
-const money = (n) =>
+const money = (n: number | null | undefined) =>
   Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // Rates keep up to 4 decimals (0.125, 112.505) so qty × rate visibly equals the amount.
-const rate = (n) =>
+const rate = (n: number | null | undefined) =>
   Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-const qty = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
-const usDate = (iso) => {
+const qty = (n: number | null | undefined) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const usDate = (iso: string | null | undefined) => {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
   return `${m}/${d}/${y}`;
@@ -65,12 +66,20 @@ const CSS = `
   .notes .label { margin-bottom: 2pt; }
 `;
 
-/**
- * @param {object} inv  invoice (or draft) with number, date, dueDate, terms, billTo, lines, notes
- * @param {object} settings  app settings (fallback for business info when inv.from is missing)
- * @param {object} [opts] { logoUrl, hasLogo, autoPrint }
- */
-function renderInvoice(inv, settings, opts = {}) {
+/** What the template prints: a saved invoice or a draft. */
+export type Printable = Pick<Invoice, 'number' | 'date'> &
+  Partial<Pick<Invoice, 'dueDate' | 'terms' | 'notes' | 'billTo' | 'from'>> & { lines?: InvoiceLine[] };
+
+export interface RenderOptions {
+  logoUrl?: string;
+  /** Defaults to whether the settings have a logo. */
+  hasLogo?: boolean;
+  /** Opens the print dialog once the page loads. */
+  autoPrint?: boolean;
+}
+
+/** `settings` supplies the business details when the invoice has none of its own (`inv.from`). */
+export function renderInvoice(inv: Printable, settings: Partial<Settings>, opts: RenderOptions = {}): string {
   const from = inv.from || { businessName: settings.businessName, businessDetails: settings.businessDetails };
   const logoUrl = opts.logoUrl ?? '/logo';
   const hasLogo = opts.hasLogo ?? !!settings.logoFile;
@@ -127,4 +136,3 @@ ${opts.autoPrint ? '<script>window.addEventListener("load",()=>setTimeout(()=>wi
 </body></html>`;
 }
 
-module.exports = { renderInvoice };

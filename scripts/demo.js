@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { start } = require('../server');
+const { start } = require('../out/server');
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cwinvoicer-demo-'));
 process.on('exit', () => fs.rmSync(dataDir, { recursive: true, force: true }));
