@@ -55,9 +55,9 @@ npm run app      # run Electron without packaging
 npm run dist     # create the .app and .dmg in dist/
 ```
 
-Output names depend on your architecture and the version in `package.json`. For version 1.2.0,
-an Apple Silicon build produces `dist/mac-arm64/CW Invoicer.app` and `dist/CW Invoicer-1.2.0-arm64.dmg`;
-an Intel build produces `dist/mac/CW Invoicer.app` and `dist/CW Invoicer-1.2.0.dmg`.
+Output names depend on your architecture and the version in `package.json`. An Apple Silicon build
+produces `dist/mac-arm64/CW Invoicer.app` and `dist/CW Invoicer-<version>-arm64.dmg`;
+an Intel build produces `dist/mac/CW Invoicer.app` and `dist/CW Invoicer-<version>.dmg`.
 Drag the app into Applications. The build is unsigned; on first launch, right-click and choose **Open**.
 
 The server uses a private local port. No Terminal or separate Chrome installation is needed
