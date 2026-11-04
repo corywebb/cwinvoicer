@@ -9,7 +9,7 @@ calculations, and JSON records; the main difference is who opens the window and 
 1. **Record work.** A client owns projects, time entries, line items, and expenses.
    An entry can belong directly to a client without a project. Unbilled work appears
    on the dashboard and is preselected when you start that client's next invoice.
-2. **Review the draft.** The builder uses [lines.js](../public/lines.js) for a live total.
+2. **Review the draft.** The builder uses [lines.ts](../src/shared/lines.ts) for a live total.
    Its preview request sends selected entry IDs to the server, which rebuilds the
    printable HTML from the stored records. Previewing does not create an invoice.
 3. **Create the invoice.** The server checks that selected entries belong to that
@@ -89,9 +89,10 @@ the interface disables export when there are no matching rows.
 | [electron/main.js](../electron/main.js) | Starts the local server, opens the native window, menus and PDF integration |
 | [electron/print-invoice.js](../electron/print-invoice.js) | Native print lifecycle, cancellation, errors and temporary-window cleanup |
 | [server.js](../server.js) | HTTP routes, record validation, invoice lifecycle and JSON persistence |
-| [public/app.js](../public/app.js) | Navigation, forms, builder, invoice ledger and CSV download |
-| [public/lines.js](../public/lines.js) | Shared invoice line calculations |
-| [public/ledger.js](../public/ledger.js) | Shared ledger selection, totals, status and CSV serialization |
+| [src/client/](../src/client) | Navigation, forms, builder, invoice ledger and CSV download (bundled to `public/app.js`) |
+| [src/shared/lines.ts](../src/shared/lines.ts) | Shared invoice line calculations |
+| [src/shared/ledger.ts](../src/shared/ledger.ts) | Shared ledger selection, totals, status and CSV serialization |
+| [src/shared/types.ts](../src/shared/types.ts) | Types for every stored record and the app state |
 | [lib/invoice-template.js](../lib/invoice-template.js) | Printable invoice HTML |
 | [scripts/demo.js](../scripts/demo.js) | Fictional workspace in a disposable temporary directory |
 

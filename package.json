@@ -7,10 +7,18 @@
   "author": "Cory Webb Media",
   "main": "electron/main.js",
   "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc",
+    "prestart": "npm run build",
     "start": "node server.js --open",
+    "preapp": "npm run build",
     "app": "electron .",
+    "predist": "npm run typecheck && npm run build",
     "dist": "electron-builder --mac",
+    "pretest": "npm run build",
     "test": "node --test",
+    "predemo": "npm run build",
     "demo": "node scripts/demo.js"
   },
   "engines": {
@@ -18,7 +26,9 @@
   },
   "devDependencies": {
     "electron": "45.2.1",
-    "electron-builder": "26.18.0"
+    "electron-builder": "26.18.0",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
   },
   "build": {
     "appId": "com.corywebbmedia.cwinvoicer",
@@ -30,7 +40,9 @@
     "files": [
       "server.js",
       "lib/**",
+      "out/**",
       "public/**",
+      "!public/app.js.map",
       "electron/**",
       "package.json"
     ],
